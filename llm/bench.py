@@ -184,7 +184,7 @@ ITEMS = {i["id"]: i for i in CONTEXT["items"]}
 CLARIFY = {"status": "NEEDS_CLARIFICATION", "proposals": [], "clarification": {"question": "(서버 검사)", "missing": []}}
 
 
-def validate(result):
+def validate(result, text):
     """백엔드가 모델 답을 받은 뒤 하는 검사. 고칠 수 있으면 고치고, 아니면 다시 묻기로 바꾼다."""
     if not isinstance(result, dict) or result.get("status") not in ("PARSED", "NEEDS_CLARIFICATION", "UNSUPPORTED"):
         return dict(CLARIFY), "모양 오류"
@@ -223,6 +223,12 @@ def validate(result):
                 return dict(CLARIFY), "같은 사람 두 번"
         if not ids or any(i not in MEMBER_IDS for i in ids):
             return dict(CLARIFY), "없는 사람"
+        # 문장에 없는 사람 · 항목을 모델이 지어내면 다시 묻는다 (사람 · 항목 이름이 문장에 나와야 함)
+        names = {m["id"]: m["name"] for m in CONTEXT["members"]}
+        if any(names[i] not in text for i in ids):
+            return dict(CLARIFY), "문장에 없는 사람"
+        if ITEMS[item]["name"] not in text:
+            return dict(CLARIFY), "문장에 없는 항목"
         if t == "EXCLUDE" and len(set(MEMBER_IDS) - set(ids)) == 0:
             return dict(CLARIFY), "모두 빠짐"
         if t == "WEIGHTED" and any(not 1 <= w["weight"] <= 100 for w in prm["weights"]):
@@ -260,7 +266,7 @@ def normalize(result):
     return (status, tuple(sorted((k, tuple(sorted(v))) for k, v in rules.items())))
 
 
-def judge(expected, content):
+def judge(expected, content, text):
     """모델 답 그대로(raw)와 서버 검사를 거친 뒤(final)를 따로 채점한다."""
     try:
         got = json.loads(content)
@@ -270,7 +276,7 @@ def judge(expected, content):
         raw = "맞음" if normalize(got) == normalize(expected) else "틀림"
     except (KeyError, TypeError, AttributeError):
         raw = "틀림"
-    fixed, note = validate(got)
+    fixed, note = validate(got, text)
     final = "맞음" if normalize(fixed) == normalize(expected) else "틀림"
     return raw, final, got, fixed, note
 
@@ -307,7 +313,7 @@ def main():
             print(f"[{case['id']}] 서버 호출 실패: {e}", file=sys.stderr)
             rows.append((case, "호출 실패", "호출 실패", None, None, "", None))
             continue
-        raw, final, got, fixed, note = judge(case["expected"], content)
+        raw, final, got, fixed, note = judge(case["expected"], content, case["text"])
         times.append(elapsed)
         rows.append((case, raw, final, got, fixed, note, elapsed))
         print(f"[{case['id']:>2}] 모델 {raw:<5} 검사 후 {final:<5} {elapsed:5.1f}초  {case['text']}")
