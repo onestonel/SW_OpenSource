@@ -16,12 +16,22 @@ SW_OpenSource/
 ### 브랜치
 
 ```
-main      발표용 안정 버전
+main                     발표용 완성본 (태그: v1.0, v1.0.1 …)
+  ↑            ↑
+release/v1     hotfix/{이슈번호}-{내용}
   ↑
-develop   통합 브랜치 (PR은 여기로)
+develop                  통합 브랜치 (평소 PR은 여기로)
   ↑
 feature/{이슈번호}-{기능명}   예: feature/12-settlement-engine
 ```
+
+| 브랜치 | 어디서 만드나 | 어디로 병합하나 | 언제 |
+| --- | --- | --- | --- |
+| `feature/…` | develop | develop | 평소 기능 작업 |
+| `release/v1` | develop | main + develop | 시연 직전 마지막 점검 |
+| `hotfix/…` | main | main + develop | main에서 급한 버그가 나왔을 때 |
+
+`main`과 `develop`에는 직접 push할 수 없습니다. 모두 PR로 병합하고, 다른 팀원 1명의 승인이 필요합니다.
 
 ### 작업 순서
 
@@ -59,3 +69,38 @@ feature/{이슈번호}-{기능명}   예: feature/12-settlement-engine
 - 다른 팀원 1명 이상 승인
 - 자동 테스트 통과
 - API가 바뀌는 PR은 프론트엔드 담당도 리뷰
+
+### 시연 전: release
+
+```bash
+git switch develop
+git pull origin develop
+git switch -c release/v1
+git push -u origin release/v1
+```
+
+1. `release/v1`에서는 새 기능을 넣지 않고, 시연 점검 중 찾은 작은 수정만 합니다.
+2. 점검이 끝나면 `release/v1 → main` PR을 열어 병합하고, main에 `v1.0` 태그를 붙입니다.
+   ```bash
+   git switch main
+   git pull origin main
+   git tag v1.0
+   git push origin v1.0
+   ```
+3. 점검 중 고친 내용이 빠지지 않게 `release/v1 → develop` PR도 열어 병합합니다.
+
+### 급한 버그: hotfix
+
+main(시연 · 발표 버전)에서 버그가 나왔을 때만 씁니다. 먼저 "버그" 양식으로 Issue를 만듭니다.
+
+```bash
+git switch main
+git pull origin main
+git switch -c hotfix/21-transfer-rounding
+# 고치고 커밋
+git commit -m "fix: 송금 목록 반올림 오류 수정 #21"
+git push -u origin hotfix/21-transfer-rounding
+```
+
+1. `hotfix/… → main` PR을 열어 병합하고, `v1.0.1`처럼 끝자리를 올린 태그를 붙입니다.
+2. 같은 수정이 develop에도 들어가게 `hotfix/… → develop` PR도 열어 병합합니다.
