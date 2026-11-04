@@ -8,3 +8,13 @@
 {"id": 8, "text": "오늘 날씨 좋다", "expected": {"status": "UNSUPPORTED"}}
 {"id": 9, "text": "B는 고기를 안 먹었고 D는 술을 안 마셨어", "expected": {"status": "PARSED", "proposals": [{"receipt_item_id": 102, "type": "EXCLUDE", "params": {"member_ids": [2]}}, {"receipt_item_id": 201, "type": "EXCLUDE", "params": {"member_ids": [4]}}]}}
 {"id": 10, "text": "고기는 A 1인분, B 1인분, C 2인분 먹었어", "expected": {"status": "PARSED", "proposals": [{"receipt_item_id": 102, "type": "QUANTITY", "params": {"quantities": [{"member_id": 1, "quantity": 1}, {"member_id": 2, "quantity": 1}, {"member_id": 3, "quantity": 2}]}}]}}
+{"id": 11, "set": "holdout", "text": "술은 A, B, C 셋이서만 마셨어", "expected": {"status": "PARSED", "proposals": [{"receipt_item_id": 201, "type": "EQUAL", "params": {"member_ids": [1, 2, 3]}}]}}
+{"id": 12, "set": "holdout", "text": "김치찌개는 D 빼고 나눠", "expected": {"status": "PARSED", "proposals": [{"receipt_item_id": 101, "type": "EXCLUDE", "params": {"member_ids": [4]}}]}}
+{"id": 13, "set": "holdout", "text": "고기는 B가 다 계산할게", "expected": {"status": "PARSED", "proposals": [{"receipt_item_id": 102, "type": "FULL", "params": {"member_id": 2}}]}}
+{"id": 14, "set": "holdout", "text": "택시는 A랑 D 둘이서 나눠", "expected": {"status": "PARSED", "proposals": [{"receipt_item_id": 301, "type": "EQUAL", "params": {"member_ids": [1, 4]}}]}}
+{"id": 15, "set": "holdout", "text": "할인은 A랑 B만 해당돼", "expected": {"status": "PARSED", "proposals": [{"receipt_item_id": 103, "type": "EQUAL", "params": {"member_ids": [1, 2]}}]}}
+{"id": 16, "set": "holdout", "text": "술은 D만 빼고 마셨어", "expected": {"status": "PARSED", "proposals": [{"receipt_item_id": 201, "type": "EXCLUDE", "params": {"member_ids": [4]}}]}}
+{"id": 17, "set": "holdout", "text": "고기는 A가 더 많이 먹었어", "expected": {"status": "NEEDS_CLARIFICATION"}}
+{"id": 18, "set": "holdout", "text": "점심 메뉴 추천해줘", "expected": {"status": "UNSUPPORTED"}}
+{"id": 19, "set": "holdout", "text": "고기는 A 2인분, C 2인분 먹었어", "expected": {"status": "PARSED", "proposals": [{"receipt_item_id": 102, "type": "QUANTITY", "params": {"quantities": [{"member_id": 1, "quantity": 2}, {"member_id": 3, "quantity": 2}]}}]}}
+{"id": 20, "set": "holdout", "text": "택시비는 C가 내고, 김치찌개는 B랑 C만 먹었어", "expected": {"status": "PARSED", "proposals": [{"receipt_item_id": 301, "type": "FULL", "params": {"member_id": 3}}, {"receipt_item_id": 101, "type": "EQUAL", "params": {"member_ids": [2, 3]}}]}}

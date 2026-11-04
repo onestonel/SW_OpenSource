@@ -38,52 +38,53 @@ CONTEXT = {
 TYPES = ["EQUAL", "EXCLUDE", "FULL", "WEIGHTED", "QUANTITY"]
 
 # 출력 모양을 고정하는 JSON schema (llama.cpp는 이 모양 밖의 글자를 만들 수 없다)
+# 규칙 종류마다 넣을 수 있는 칸을 따로 정해서, 작은 모델이 칸을 섞지 못하게 한다.
+INT = {"type": "integer"}
+IDS = {"type": "array", "items": INT, "minItems": 1}
+
+
+def pairs(key):
+    return {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+            "type": "object",
+            "properties": {"member_id": INT, key: INT},
+            "required": ["member_id", key],
+            "additionalProperties": False,
+        },
+    }
+
+
+PARAMS = {
+    "EQUAL": ({"member_ids": IDS}, ["member_ids"]),
+    "EXCLUDE": ({"member_ids": IDS}, ["member_ids"]),
+    "FULL": ({"member_id": INT}, ["member_id"]),
+    "WEIGHTED": ({"weights": pairs("weight")}, ["weights"]),
+    "QUANTITY": ({"quantities": pairs("quantity")}, ["quantities"]),
+}
+
+
+def proposal_schema(rule_type):
+    props, required = PARAMS[rule_type]
+    return {
+        "type": "object",
+        "properties": {
+            "receipt_item_id": INT,
+            "type": {"type": "string", "enum": [rule_type]},
+            "params": {"type": "object", "properties": props, "required": required, "additionalProperties": False},
+            "evidence": {"type": "string"},
+        },
+        "required": ["receipt_item_id", "type", "params"],
+        "additionalProperties": False,
+    }
+
+
 SCHEMA = {
     "type": "object",
     "properties": {
         "status": {"type": "string", "enum": ["PARSED", "NEEDS_CLARIFICATION", "UNSUPPORTED"]},
-        "proposals": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "receipt_item_id": {"type": "integer"},
-                    "type": {"type": "string", "enum": TYPES},
-                    "params": {
-                        "type": "object",
-                        "properties": {
-                            "member_ids": {"type": "array", "items": {"type": "integer"}},
-                            "member_id": {"type": "integer"},
-                            "weights": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "member_id": {"type": "integer"},
-                                        "weight": {"type": "integer"},
-                                    },
-                                    "required": ["member_id", "weight"],
-                                },
-                            },
-                            "quantities": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "member_id": {"type": "integer"},
-                                        "quantity": {"type": "integer"},
-                                    },
-                                    "required": ["member_id", "quantity"],
-                                },
-                            },
-                        },
-                        "additionalProperties": False,
-                    },
-                    "evidence": {"type": "string"},
-                },
-                "required": ["receipt_item_id", "type", "params"],
-            },
-        },
+        "proposals": {"type": "array", "items": {"anyOf": [proposal_schema(t) for t in TYPES]}},
         "clarification": {
             "anyOf": [
                 {"type": "null"},
@@ -97,11 +98,13 @@ SCHEMA = {
                         },
                     },
                     "required": ["question", "missing"],
+                    "additionalProperties": False,
                 },
             ]
         },
     },
     "required": ["status", "proposals", "clarification"],
+    "additionalProperties": False,
 }
 
 SYSTEM_PROMPT = """너는 정산 앱의 '분담 조건 해석기'다. 사용자의 문장을 분담 규칙 JSON으로 바꾼다. 금액 계산은 하지 않는다.
@@ -118,8 +121,16 @@ SYSTEM_PROMPT = """너는 정산 앱의 '분담 조건 해석기'다. 사용자�
 - 정산과 관계없는 문장이면 status="UNSUPPORTED", proposals=[].
 - 문장에 없는 사람 · 항목 · 숫자를 만들지 않는다.
 - PARSED일 때 clarification은 null이다. evidence에는 근거가 된 문장 부분을 넣는다.
+- 한 항목에는 규칙을 하나만 만든다. 수량은 한 규칙의 quantities에 모두 넣는다.
 
-예시 (데이터에 '커피'(id 900)가 있을 때):
+종류 고르는 법:
+- "~만", "~끼리", "~둘이서/셋이서" → 말한 사람들만 낸다 → EQUAL (member_ids = 말한 사람들)
+- "~빼고", "~는 안 먹었어/안 마셨어" → 말한 사람을 뺀다 → EXCLUDE (member_ids = 빠지는 사람들)
+- "~가 전부/다 낼게" → FULL
+- "1:1:2", "두 배" 처럼 비율 숫자 → WEIGHTED
+- "~인분", "~개" 처럼 각자 먹은 수량 → QUANTITY. 일부 사람의 수량만 나와서 합이 항목 quantity와 맞지 않으면 NEEDS_CLARIFICATION
+
+예시 (데이터에 '커피'(id 900, quantity 1)가 있을 때):
 문장: 커피는 A만 마셨어
 답: {"status":"PARSED","proposals":[{"receipt_item_id":900,"type":"FULL","params":{"member_id":1},"evidence":"커피는 A만 마셨어"}],"clarification":null}
 """
@@ -168,39 +179,100 @@ def call(args, text):
     return content, elapsed
 
 
-def normalize_params(rule_type, params):
-    if rule_type in ("EQUAL", "EXCLUDE"):
-        return ("ids", tuple(sorted(params.get("member_ids") or [])))
-    if rule_type == "FULL":
-        return ("id", params.get("member_id"))
-    if rule_type == "WEIGHTED":
-        return ("w", tuple(sorted((w["member_id"], w["weight"]) for w in params.get("weights") or [])))
-    if rule_type == "QUANTITY":
-        return ("q", tuple(sorted((q["member_id"], q["quantity"]) for q in params.get("quantities") or [])))
-    return ("?", None)
+MEMBER_IDS = [m["id"] for m in CONTEXT["members"]]
+ITEMS = {i["id"]: i for i in CONTEXT["items"]}
+CLARIFY = {"status": "NEEDS_CLARIFICATION", "proposals": [], "clarification": {"question": "(서버 검사)", "missing": []}}
+
+
+def validate(result):
+    """백엔드가 모델 답을 받은 뒤 하는 검사. 고칠 수 있으면 고치고, 아니면 다시 묻기로 바꾼다."""
+    if not isinstance(result, dict) or result.get("status") not in ("PARSED", "NEEDS_CLARIFICATION", "UNSUPPORTED"):
+        return dict(CLARIFY), "모양 오류"
+    if result["status"] != "PARSED":
+        return {"status": result["status"], "proposals": [], "clarification": result.get("clarification")}, ""
+    merged, notes = {}, []
+    for p in result.get("proposals") or []:
+        item, rule_type, params = p.get("receipt_item_id"), p.get("type"), p.get("params") or {}
+        if item not in ITEMS or rule_type not in PARAMS:
+            return dict(CLARIFY), "없는 항목 · 종류"
+        keys, _ = PARAMS[rule_type]
+        params = {k: v for k, v in params.items() if k in keys}  # 종류에 맞지 않는 칸은 버린다
+        if rule_type == "QUANTITY":
+            params["quantities"] = [q for q in params.get("quantities", []) if q.get("quantity", 0) > 0]
+        if item in merged:
+            prev = merged[item]
+            if rule_type == prev["type"] == "QUANTITY":  # 같은 항목 수량이 여러 줄이면 합친다
+                prev["params"]["quantities"] += params["quantities"]
+                notes.append("수량 합침")
+                continue
+            return dict(CLARIFY), "같은 항목 규칙 2개"
+        merged[item] = {"receipt_item_id": item, "type": rule_type, "params": params}
+    if not merged:
+        return dict(CLARIFY), "규칙 없음"
+    for item, p in merged.items():
+        t, prm = p["type"], p["params"]
+        ids = []
+        if t in ("EQUAL", "EXCLUDE"):
+            ids = prm.get("member_ids") or []
+        elif t == "FULL":
+            ids = [prm.get("member_id")]
+        else:
+            key = "weights" if t == "WEIGHTED" else "quantities"
+            ids = [x["member_id"] for x in prm.get(key) or []]
+            if len(ids) != len(set(ids)):
+                return dict(CLARIFY), "같은 사람 두 번"
+        if not ids or any(i not in MEMBER_IDS for i in ids):
+            return dict(CLARIFY), "없는 사람"
+        if t == "EXCLUDE" and len(set(MEMBER_IDS) - set(ids)) == 0:
+            return dict(CLARIFY), "모두 빠짐"
+        if t == "WEIGHTED" and any(not 1 <= w["weight"] <= 100 for w in prm["weights"]):
+            return dict(CLARIFY), "비율 범위"
+        if t == "QUANTITY" and sum(q["quantity"] for q in prm["quantities"]) != ITEMS[item]["quantity"]:
+            return dict(CLARIFY), "수량 합 불일치"
+    return {"status": "PARSED", "proposals": list(merged.values()), "clarification": None}, ", ".join(notes)
+
+
+def effect(rule_type, params):
+    """규칙이 실제로 만드는 '사람별 몫 비율'. 표현이 달라도 돈이 같으면 같다고 본다."""
+    from fractions import Fraction
+
+    if rule_type == "EQUAL":
+        w = {m: 1 for m in params.get("member_ids") or []}
+    elif rule_type == "EXCLUDE":
+        w = {m: 1 for m in MEMBER_IDS if m not in (params.get("member_ids") or [])}
+    elif rule_type == "FULL":
+        w = {params.get("member_id"): 1}
+    elif rule_type == "WEIGHTED":
+        w = {x["member_id"]: x["weight"] for x in params.get("weights") or []}
+    else:
+        w = {x["member_id"]: x["quantity"] for x in params.get("quantities") or []}
+    total = sum(w.values())
+    return tuple(sorted((m, Fraction(v, total)) for m, v in w.items() if v)) if total else ()
 
 
 def normalize(result):
     status = result.get("status")
     if status != "PARSED":
         return (status,)
-    rules = sorted(
-        (p["receipt_item_id"], p["type"], normalize_params(p["type"], p.get("params") or {}))
-        for p in result.get("proposals") or []
-    )
-    return (status, tuple(rules))
+    rules = {}
+    for p in result.get("proposals") or []:
+        rules.setdefault(p["receipt_item_id"], []).append(effect(p["type"], p.get("params") or {}))
+    return (status, tuple(sorted((k, tuple(sorted(v))) for k, v in rules.items())))
 
 
 def judge(expected, content):
+    """모델 답 그대로(raw)와 서버 검사를 거친 뒤(final)를 따로 채점한다."""
     try:
         got = json.loads(content)
     except json.JSONDecodeError:
-        return "형식 오류", None
+        return "형식 오류", "형식 오류", None, None, ""
     try:
-        ok = normalize(got) == normalize(expected)
-    except (KeyError, TypeError):
-        return "형식 오류", got
-    return ("맞음" if ok else "틀림"), got
+        raw = "맞음" if normalize(got) == normalize(expected) else "틀림"
+    except (KeyError, TypeError, AttributeError):
+        raw = "틀림"
+    fixed, note = validate(got)
+    final = "맞음" if normalize(fixed) == normalize(expected) else "틀림"
+    return raw, final, got, fixed, note
 
 
 def short(obj):
@@ -226,34 +298,46 @@ def main():
     args = parser.parse_args()
 
     cases = [json.loads(line) for line in Path(args.sentences).read_text(encoding="utf-8").splitlines() if line.strip()]
-    rows, times, correct = [], [], 0
+    rows, times = [], []
     for case in cases:
+        case.setdefault("set", "tuning")
         try:
             content, elapsed = call(args, case["text"])
         except (urllib.error.URLError, TimeoutError, KeyError) as e:
             print(f"[{case['id']}] 서버 호출 실패: {e}", file=sys.stderr)
-            rows.append((case, "호출 실패", None, None))
+            rows.append((case, "호출 실패", "호출 실패", None, None, "", None))
             continue
-        verdict, got = judge(case["expected"], content)
-        correct += verdict == "맞음"
+        raw, final, got, fixed, note = judge(case["expected"], content)
         times.append(elapsed)
-        rows.append((case, verdict, got, elapsed))
-        print(f"[{case['id']:>2}] {verdict:<5} {elapsed:5.1f}초  {case['text']}")
+        rows.append((case, raw, final, got, fixed, note, elapsed))
+        print(f"[{case['id']:>2}] 모델 {raw:<5} 검사 후 {final:<5} {elapsed:5.1f}초  {case['text']}")
 
     lines = [
         f"모델: {args.model or '(서버 기본 모델)'} · 주소: {args.base_url}",
         "",
-        "| # | 문장 | 기대 | 결과 | 판정 | 시간(초) |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| # | 세트 | 문장 | 기대 | 모델 답 | 모델 | 검사 후 | 시간(초) |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
-    for case, verdict, got, elapsed in rows:
+    for case, raw, final, got, fixed, note, elapsed in rows:
         t = f"{elapsed:.1f}" if elapsed is not None else "-"
-        lines.append(f"| {case['id']} | {case['text']} | {short(case['expected'])} | {short(got)} | {verdict} | {t} |")
+        fin = final + (f" ({note})" if note else "")
+        lines.append(
+            f"| {case['id']} | {case['set']} | {case['text']} | {short(case['expected'])} | {short(got)} | {raw} | {fin} | {t} |"
+        )
     avg = statistics.mean(times) if times else 0
     mx = max(times) if times else 0
-    lines += ["", f"**맞힌 개수 {correct}/{len(cases)} · 평균 {avg:.1f}초 · 최대 {mx:.1f}초**"]
-    passed = correct >= 8 and avg <= 15
-    lines.append(f"판정 기준(8개 이상 · 평균 15초 이하): {'통과' if passed else '미달'}")
+    lines.append("")
+    for name in ("tuning", "holdout"):
+        part = [r for r in rows if r[0]["set"] == name]
+        if part:
+            r_ok = sum(r[1] == "맞음" for r in part)
+            f_ok = sum(r[2] == "맞음" for r in part)
+            label = "프롬프트 고칠 때 본 문장" if name == "tuning" else "처음 보는 문장"
+            lines.append(f"- {label}({name}): 모델 {r_ok}/{len(part)} · 검사 후 {f_ok}/{len(part)}")
+    total_final = sum(r[2] == "맞음" for r in rows)
+    lines.append(f"- 전체 검사 후 {total_final}/{len(rows)} · 평균 {avg:.1f}초 · 최대 {mx:.1f}초")
+    passed = total_final >= 0.8 * len(rows) and avg <= 15
+    lines.append(f"\n**판정 기준(검사 후 80% 이상 · 평균 15초 이하): {'통과' if passed else '미달'}**")
     report = "\n".join(lines)
     print("\n" + report)
     if args.out:
