@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,9 +17,33 @@ from .core.errors import install_error_handlers, internal_error_response
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("settle")
 
+SERVER_DIR = Path(__file__).resolve().parent.parent
+
+
+def migrate() -> None:
+    """DB 테이블을 최신으로 올린다 (alembic upgrade head). DB가 꺼져 있으면 경고만 남기고 서버는 켠다 (/health가 503)."""
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config(str(SERVER_DIR / "alembic.ini"))
+    cfg.set_main_option("script_location", str(SERVER_DIR / "migrations"))
+    cfg.attributes["configure_logger"] = False
+    try:
+        command.upgrade(cfg, "head")
+    except Exception as e:  # DB 연결 실패 등
+        log.warning("DB migration skipped: %s", e.__class__.__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if settings.auto_migrate:
+        migrate()
+    yield
+
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="같이정산 API", version="0.1.0", description="영수증은 사진으로, 분담 조건은 말로.")
+    app = FastAPI(title="같이정산 API", version="0.1.0", description="영수증은 사진으로, 분담 조건은 말로.",
+                  lifespan=lifespan)
     install_error_handlers(app)
     app.include_router(v1_router)
 

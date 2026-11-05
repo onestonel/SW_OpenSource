@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .core.config import settings
@@ -13,13 +13,22 @@ CONNECT_TIMEOUT_S = 3  # DB가 꺼져 있을 때 /health가 오래 기다리지 
 
 
 class Base(DeclarativeBase):
-    """테이블 모델의 부모 클래스 (테이블은 #5 DB 테이블 PR에서 더한다)."""
+    """테이블 모델의 부모 클래스 (app/models.py)."""
 
 
 def make_engine(url: str, **kwargs) -> Engine:
     if url.startswith("postgresql"):
         kwargs.setdefault("connect_args", {"connect_timeout": CONNECT_TIMEOUT_S})
-    return create_engine(url, pool_pre_ping=True, **kwargs)
+    engine = create_engine(url, pool_pre_ping=True, **kwargs)
+    if engine.dialect.name == "sqlite":
+        # 테스트용 SQLite는 기본으로 외래 키를 검사하지 않는다 (ON DELETE CASCADE도 안 됨)
+        @event.listens_for(engine, "connect")
+        def _fk_on(dbapi_conn, _):
+            cur = dbapi_conn.cursor()
+            cur.execute("PRAGMA foreign_keys=ON")
+            cur.close()
+
+    return engine
 
 
 engine = make_engine(settings.database_url)
