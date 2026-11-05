@@ -293,7 +293,7 @@
 .sum-line--warn { color: #9a4a00; font-weight: 700; }
 
 /* 확인 · 확정 */
-.detail-photo { width: 100%; max-height: 240px; object-fit: contain; border-radius: 18px; padding: 8px; }
+.detail-photo { width: 100%; max-height: 160px; object-fit: contain; border-radius: 18px; padding: 8px; }
 .lines-card { display: flex; flex-direction: column; padding: 8px 18px; }
 .line { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; font-size: 16px; }
 .line + .line { border-top: 1px solid rgba(28, 28, 30, 0.06); }
