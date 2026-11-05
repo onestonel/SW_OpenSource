@@ -3,6 +3,7 @@ import './App.css'
 import CreateRoom from './pages/CreateRoom.jsx'
 import Home from './pages/Home.jsx'
 import NotFound from './pages/NotFound.jsx'
+import ReceiptForm from './pages/ReceiptForm.jsx'
 import RoomCreated from './pages/RoomCreated.jsx'
 import RoomHome from './pages/RoomHome.jsx'
 import Settings from './pages/Settings.jsx'
@@ -17,6 +18,8 @@ export default function App() {
         <Route path="/rooms/:token" element={<RoomHome />} />
         <Route path="/rooms/:token/created" element={<RoomCreated />} />
         <Route path="/rooms/:token/settings" element={<Settings />} />
+        <Route path="/rooms/:token/receipts/new" element={<ReceiptForm />} />
+        <Route path="/rooms/:token/receipts/:id/edit" element={<ReceiptForm />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
