@@ -1,0 +1,130 @@
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand__logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px rgba(10, 106, 240, 0.25);
+}
+
+.brand__name {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.server-status {
+  margin: 0 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-sub);
+  background: var(--glass-bg);
+}
+
+.server-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.server-status--ok {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.server-status--fail {
+  color: var(--error);
+  background: rgba(180, 35, 35, 0.1);
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.hero p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-sub);
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 8px 18px;
+}
+
+.steps__item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+}
+
+.steps__item + .steps__item {
+  border-top: 1px solid rgba(28, 28, 30, 0.06);
+}
+
+.steps__item div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.steps__item strong {
+  font-size: 15px;
+}
+
+.steps__item div span {
+  font-size: 13px;
+  color: var(--text-sub);
+}
+
+.steps__num {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(10, 106, 240, 0.12);
+  color: var(--link);
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spacer {
+  flex-grow: 1;
+}
+
+.footnote {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-sub);
+}
