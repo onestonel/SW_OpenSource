@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router'
 import { api, won } from '../api.js'
 import { useLoad } from '../hooks.js'
-import { Loading, Page, StatusBadge } from '../ui.jsx'
+import { BackLink, Loading, Page, StatusBadge } from '../ui.jsx'
 
 export default function RoomHome() {
   const { token } = useParams()
@@ -16,7 +16,10 @@ export default function RoomHome() {
   return (
     <Page>
       <div className="row-between">
-        <span className="muted-14 strong">같이정산</span>
+        <div className="row-gap-12">
+          <BackLink to="/" label="처음 화면으로" />
+          <span className="muted-14 strong">같이정산</span>
+        </div>
         <Link to={`${base}/settings`} aria-label="정산방 설정" className="icon-btn">
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" />
