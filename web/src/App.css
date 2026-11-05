@@ -267,7 +267,7 @@
 .photo-card__actions label.btn-pill:focus-within { outline: 3px solid var(--link); outline-offset: 2px; }
 /* 크게 보기: 화면 위에 붙여서 스크롤해도 사진이 보인다 */
 .photo-card--big { position: sticky; top: 8px; z-index: 2; flex-direction: column; align-items: stretch; }
-.photo-card--big .photo-card__img { width: 100%; height: auto; max-height: 45vh; object-fit: contain; }
+.photo-card--big .photo-card__img { width: 100%; height: auto; max-height: 35vh; object-fit: contain; }
 .photo-card--big .photo-card__actions { flex-direction: row; justify-content: flex-end; }
 
 .payer-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
