@@ -5,6 +5,7 @@ import Home from './pages/Home.jsx'
 import NotFound from './pages/NotFound.jsx'
 import ReceiptDetail from './pages/ReceiptDetail.jsx'
 import ReceiptForm from './pages/ReceiptForm.jsx'
+import Result from './pages/Result.jsx'
 import RoomCreated from './pages/RoomCreated.jsx'
 import RoomHome from './pages/RoomHome.jsx'
 import Settings from './pages/Settings.jsx'
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/rooms/:token/receipts/:id" element={<ReceiptDetail />} />
         <Route path="/rooms/:token/receipts/:id/edit" element={<ReceiptForm />} />
         <Route path="/rooms/:token/split" element={<Split />} />
+        <Route path="/rooms/:token/result" element={<Result />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
