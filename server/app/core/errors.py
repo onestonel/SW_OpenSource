@@ -35,6 +35,10 @@ def error_response(status: int, code: str, message: str, details: dict[str, Any]
     return JSONResponse(status_code=status, content={"error": body})
 
 
+def internal_error_response() -> JSONResponse:
+    return error_response(500, "INTERNAL_ERROR", "서버 오류가 발생했습니다.")
+
+
 _HTTP_CODES = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}
 _HTTP_MESSAGES = {
     404: "요청한 주소를 찾을 수 없습니다.",
@@ -63,5 +67,7 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def handle_unexpected(_: Request, e: Exception) -> JSONResponse:
-        log.exception("unhandled error: %s", e)
-        return error_response(500, "INTERNAL_ERROR", "서버 오류가 발생했습니다.")
+        # 마지막 안전망. 보통의 예외는 main.py의 request_id 미들웨어가 먼저 잡아 헤더까지 붙여 보낸다.
+        # 이 처리기는 미들웨어 바깥에서 돌아 X-Request-Id·CORS 헤더가 붙지 않는다.
+        log.exception("unhandled error outside middleware: %s", e)
+        return internal_error_response()
