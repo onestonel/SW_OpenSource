@@ -291,3 +291,45 @@
 .sum-line { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .sum-line--ok { color: var(--success); }
 .sum-line--warn { color: #9a4a00; font-weight: 700; }
+
+/* 확인 · 확정 */
+.detail-photo { width: 100%; max-height: 240px; object-fit: contain; border-radius: 18px; padding: 8px; }
+.lines-card { display: flex; flex-direction: column; padding: 8px 18px; }
+.line { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; font-size: 16px; }
+.line + .line { border-top: 1px solid rgba(28, 28, 30, 0.06); }
+.line--discount { color: var(--error); }
+.line--total { padding: 14px 0; font-size: 17px; font-weight: 700; }
+.sum-box {
+  display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 16px;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+}
+.sum-box__value { font-size: 20px; font-weight: 700; }
+.notice-ok {
+  display: flex; gap: 10px; align-items: center; padding: 14px 16px; border-radius: 18px;
+  background: rgba(30, 158, 74, 0.1); border: 1px solid rgba(30, 158, 74, 0.3);
+  font-size: 15px; font-weight: 700; color: var(--success);
+}
+.notice-plain {
+  display: flex; gap: 12px; align-items: flex-start; padding: 16px; border-radius: 18px;
+  background: rgba(255, 255, 255, 0.5); border: 1px solid var(--glass-border);
+}
+.notice-plain p { margin: 0; font-size: 14px; line-height: 1.6; color: #3a3a40; }
+.btn-secondary:disabled, .btn-text:disabled { opacity: 0.6; cursor: default; }
+
+/* 분담 조건 체크 표 (구성원이 많으면 카드 안에서 옆으로 밀어 본다) */
+.check-card { display: flex; flex-direction: column; padding: 14px 12px 8px 16px; border-radius: 20px; overflow-x: auto; }
+.check-grid { display: grid; align-items: center; }
+.check-grid--head { padding-bottom: 6px; border-bottom: 1px solid rgba(28, 28, 30, 0.08); }
+.check-grid--row { min-height: 52px; border-bottom: 1px solid rgba(28, 28, 30, 0.05); }
+.check-grid--row:last-child { border-bottom: none; }
+.check-grid__member { text-align: center; font-size: 14px; font-weight: 700; color: #3a3a40; overflow: hidden; text-overflow: ellipsis; }
+.check-hint { font-size: 12px; color: var(--text-sub); }
+.check-hint--error { font-weight: 700; color: var(--error); }
+.check-cell { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.check-cell:focus-within .check-box { outline: 3px solid var(--link); outline-offset: 2px; }
+.check-box {
+  width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.8); border: 1.5px solid rgba(60, 60, 67, 0.35);
+}
+.check-box--on { background: var(--primary); border: none; }
+.check-box--error { border-color: #d93636; }

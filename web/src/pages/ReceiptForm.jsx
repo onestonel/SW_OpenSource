@@ -73,7 +73,7 @@ function Form({ room, receipt }) {
     try {
       const saved = receipt ? await api.updateReceipt(room.room_token, receipt.id, body) : await api.createReceipt(room.room_token, body)
       if (photo) await api.uploadPhoto(room.room_token, saved.id, photo)
-      navigate(base, { replace: true })
+      navigate(`${base}/receipts/${saved.id}`, { replace: true })
     } catch (err) {
       setError(err)
       setBusy(false)
