@@ -101,7 +101,7 @@ def _receipt(receipt: Receipt, by_id: dict[int, Member], unit: int) -> tuple[Rec
         raise SettlementInputError("RECEIPT_EMPTY", "품목이 없는 영수증입니다.", {"receipt_id": receipt.id})
     for i in products:
         if not i.payer_ids:
-            raise SettlementInputError("ITEM_NO_PAYER", f"'{i.name}' 품목에 내는 사람이 없습니다.",
+            raise SettlementInputError("CHECK_EMPTY", f"'{i.name}' 품목에 체크된 사람이 없습니다.",
                                        {"receipt_id": receipt.id, "receipt_item_id": i.id})
 
     participants = members(p for i in products for p in i.payer_ids)

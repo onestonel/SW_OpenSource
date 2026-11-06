@@ -179,7 +179,7 @@ def test_items_need_a_payer():
     r = Receipt(1, "x", A.id, 1_000, (Item(1, "x", 1_000, payer_ids=()),))
     with pytest.raises(SettlementInputError) as e:
         compute(MEMBERS, [r])
-    assert e.value.code == "ITEM_NO_PAYER"
+    assert e.value.code == "CHECK_EMPTY"
 
 
 def test_unknown_member_in_checks():
