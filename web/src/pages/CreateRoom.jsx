@@ -44,7 +44,7 @@ export default function CreateRoom() {
       <form className="stack-20 grow" onSubmit={submit}>
         <div className="field">
           <label htmlFor="room-name">정산방 이름</label>
-          <input id="room-name" className="input" type="text" placeholder="예: 제주 여행" value={name} onChange={(e) => setName(e.target.value)} />
+          <input id="room-name" className="input" type="text" placeholder="예: 제주 여행" maxLength={50} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
 
         <div className="field">
@@ -57,7 +57,7 @@ export default function CreateRoom() {
               <div key={i} className="list-row">
                 <span aria-hidden="true" className="list-row__num">{i + 1}</span>
                 <input
-                  type="text" className="input-bare" aria-label={`구성원 ${i + 1} 이름`} placeholder="이름"
+                  type="text" className="input-bare" aria-label={`구성원 ${i + 1} 이름`} placeholder="이름" maxLength={20}
                   value={m} onChange={(e) => setMember(i, e.target.value)}
                 />
                 <button type="button" className="icon-plain" aria-label={`구성원 ${i + 1} 지우기`} onClick={() => setMembers(members.filter((_, j) => j !== i))}>
@@ -76,7 +76,7 @@ export default function CreateRoom() {
         </div>
 
         <div className="spacer" />
-        <ErrorText error={error} />
+        <ErrorText error={error} labels={{ name: '정산방 이름', members: '구성원', rounding: '원 단위' }} />
         <button type="submit" className="btn-primary" disabled={busy}>만들기</button>
       </form>
     </Page>
