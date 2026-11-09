@@ -13,11 +13,13 @@ def _list(value: str) -> list[str]:
 @dataclass(frozen=True)
 class Settings:
     cors_origins: list[str] = field(default_factory=lambda: ["http://localhost:3000"])
+    receipt_storage_path: str = "./data/receipts"
 
 
 def load_settings() -> Settings:
     return Settings(
         cors_origins=_list(os.getenv("CORS_ORIGINS", "http://localhost:3000")),
+        receipt_storage_path=os.getenv("RECEIPT_STORAGE_PATH", "./data/receipts"),
     )
 
 
