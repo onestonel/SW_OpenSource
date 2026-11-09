@@ -27,7 +27,7 @@ async function request(method, path, body) {
   const data = res.status === 204 ? null : await res.json().catch(() => null)
   if (!res.ok) {
     const err = data?.error
-    throw new ApiError(res.status, err?.code ?? 'INTERNAL_ERROR', err?.message ?? '알 수 없는 오류가 났어요.')
+    throw new ApiError(res.status, err?.code ?? 'INTERNAL_ERROR', err?.message ?? '알 수 없는 오류가 났어요.', err?.details?.fields)
   }
   return data
 }
