@@ -4,10 +4,11 @@ import { mockRequest } from './mock.js'
 export { ApiError }
 
 // 서버 주소는 docker-compose.yml의 VITE_API_BASE_URL로 들어온다. 없으면 로컬 서버 주소를 쓴다.
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
+// (import.meta.env는 Vite가 채운다. Node 테스트에서는 없어서 ?.로 읽는다)
+export const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
 
 // shortcut: 서버 API가 생기기 전까지 기본은 목(mock) 데이터. 서버가 준비되면 VITE_USE_MOCK=false로 켜거나 기본값을 바꾼다
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false'
+const USE_MOCK = import.meta.env?.VITE_USE_MOCK !== 'false'
 
 async function request(method, path, body) {
   if (USE_MOCK) return mockRequest(method, path, body)
@@ -31,12 +32,17 @@ async function request(method, path, body) {
   return data
 }
 
-// 서버 상태 확인: GET /health → {"status": "ok"} (목 모드에서도 진짜 서버를 확인한다)
+// 서버 상태 확인 (목 모드에서도 진짜 서버를 확인한다). api-v1.md 1절:
+// 200 {"status":"ok"} → 'ok' · 503 {"db":"error"} → 'db' (서버는 켜졌고 DB만 꺼짐) · 그 밖(연결 실패 포함) → 'fail'
 export async function checkHealth() {
-  const res = await fetch(`${API_BASE_URL}/health`)
-  if (!res.ok) return false
-  const body = await res.json()
-  return body.status === 'ok'
+  try {
+    const res = await fetch(`${API_BASE_URL}/health`)
+    const body = await res.json().catch(() => null)
+    if (res.ok && body?.status === 'ok') return 'ok'
+    return res.status === 503 && body?.db === 'error' ? 'db' : 'fail'
+  } catch {
+    return 'fail'
+  }
 }
 
 // 주소 · 모양은 docs/api-v1.md (PR #17 초안)를 따른다
