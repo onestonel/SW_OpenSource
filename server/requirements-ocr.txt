@@ -1,0 +1,8 @@
+# 영수증 자동 인식(V2 프로토타입)을 실제 엔진으로 돌릴 때만 설치한다. 서버 기본값(OCR_ENGINE=stub)에는 필요 없다.
+#   pip install -r requirements-ocr.txt
+-r requirements.txt
+Pillow>=10.0
+# Tesseract 프로그램과 한국어(kor) 데이터를 따로 설치해야 한다 (app/ocr/README.md)
+pytesseract>=0.3.10
+# 비교용 두 번째 엔진. PyTorch까지 약 1GB라 필요할 때만 주석을 푼다
+# easyocr>=1.7

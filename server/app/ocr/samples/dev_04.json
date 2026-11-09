@@ -1,0 +1,37 @@
+{
+  "store_name": "바삭치킨 수원점",
+  "total_amount": 43500,
+  "items": [
+    {
+      "name": "후라이드치킨",
+      "amount": 20000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 20000
+    },
+    {
+      "name": "양념치킨",
+      "amount": 21000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 21000
+    },
+    {
+      "name": "콜라 1.25L",
+      "amount": 2500,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2500
+    }
+  ],
+  "synth": {
+    "layout": "simple",
+    "font": "batang",
+    "size": 22,
+    "rotate": -0.5,
+    "blur": 0.4,
+    "total_label": "합계",
+    "pay": "cash",
+    "seed": 4
+  }
+}

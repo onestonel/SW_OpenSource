@@ -1,0 +1,50 @@
+{
+  "store_name": "같이고기 광교점",
+  "total_amount": 93000,
+  "items": [
+    {
+      "name": "삼겹살",
+      "amount": 48000,
+      "kind": "ITEM",
+      "quantity": 3,
+      "unit_price": 16000
+    },
+    {
+      "name": "목살",
+      "amount": 32000,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 16000
+    },
+    {
+      "name": "된장찌개",
+      "amount": 3000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 3000
+    },
+    {
+      "name": "맥주",
+      "amount": 15000,
+      "kind": "ITEM",
+      "quantity": 3,
+      "unit_price": 5000
+    },
+    {
+      "name": "제휴할인",
+      "amount": -5000,
+      "kind": "DISCOUNT"
+    }
+  ],
+  "synth": {
+    "layout": "table",
+    "font": "gulim",
+    "size": 22,
+    "rotate": -1.0,
+    "blur": 0.5,
+    "subtotal_label": "합계",
+    "total_label": "결제금액",
+    "pay": "card",
+    "seed": 2
+  }
+}

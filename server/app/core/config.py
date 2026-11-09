@@ -14,12 +14,14 @@ def _list(value: str) -> list[str]:
 class Settings:
     cors_origins: list[str] = field(default_factory=lambda: ["http://localhost:3000"])
     receipt_storage_path: str = "./data/receipts"
+    ocr_engine: str = "stub"
 
 
 def load_settings() -> Settings:
     return Settings(
         cors_origins=_list(os.getenv("CORS_ORIGINS", "http://localhost:3000")),
         receipt_storage_path=os.getenv("RECEIPT_STORAGE_PATH", "./data/receipts"),
+        ocr_engine=os.getenv("OCR_ENGINE", "stub"),
     )
 
 

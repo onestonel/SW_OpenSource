@@ -1,0 +1,44 @@
+{
+  "store_name": "경기 백반집",
+  "total_amount": 40000,
+  "items": [
+    {
+      "name": "김치찌개",
+      "amount": 18000,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 9000
+    },
+    {
+      "name": "제육볶음",
+      "amount": 10000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 10000
+    },
+    {
+      "name": "공기밥",
+      "amount": 2000,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 1000
+    },
+    {
+      "name": "소주",
+      "amount": 10000,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 5000
+    }
+  ],
+  "synth": {
+    "layout": "table",
+    "font": "malgun",
+    "size": 22,
+    "rotate": 0.5,
+    "blur": 0.3,
+    "total_label": "합계",
+    "pay": "card",
+    "seed": 1
+  }
+}

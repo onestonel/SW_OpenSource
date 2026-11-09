@@ -1,0 +1,44 @@
+{
+  "store_name": "고향 국밥",
+  "total_amount": 58000,
+  "items": [
+    {
+      "name": "순대국밥",
+      "amount": 27000,
+      "kind": "ITEM",
+      "quantity": 3,
+      "unit_price": 9000
+    },
+    {
+      "name": "수육(소)",
+      "amount": 20000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 20000
+    },
+    {
+      "name": "막걸리",
+      "amount": 12000,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 6000
+    },
+    {
+      "name": "에누리",
+      "amount": -1000,
+      "kind": "DISCOUNT"
+    }
+  ],
+  "synth": {
+    "layout": "two_line",
+    "font": "batang",
+    "size": 22,
+    "rotate": -2.0,
+    "blur": 0.8,
+    "subtotal_label": "합계",
+    "total_label": "결제금액",
+    "pay": "card",
+    "noise": 0.1,
+    "seed": 16
+  }
+}
