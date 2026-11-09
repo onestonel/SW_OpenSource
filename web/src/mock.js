@@ -12,7 +12,7 @@ const photos = {} // 사진은 용량이 커서 저장하지 않고 이번 탭�
 
 const load = () => JSON.parse(storage.getItem(KEY) ?? '{"seq":1,"rooms":{}}')
 const now = () => new Date().toISOString()
-const fail = (status, code, message) => { throw new ApiError(status, code, message) }
+const fail = (status, code, message, fields) => { throw new ApiError(status, code, message, fields) }
 const invalid = (message) => fail(422, 'VALIDATION_ERROR', message)
 
 function newToken() {
@@ -104,12 +104,18 @@ function settle(r) {
 
 const routes = [
   ['POST', /^\/rooms$/, (db, _p, body) => {
+    // 진짜 서버(server/app/schemas.py RoomCreateIn)와 같은 답: 422 + 칸별 이유
     const name = body.name?.trim()
     const names = (body.members ?? []).map((n) => n.trim())
-    if (!name) invalid('정산방 이름을 입력해주세요.')
-    if (names.length < 2) invalid('구성원을 2명 이상 입력해주세요.')
-    if (names.some((n) => !n)) invalid('빈 구성원 이름이 있어요.')
-    if (new Set(names).size !== names.length) invalid('같은 이름의 구성원이 있어요.')
+    const fields = {}
+    if (!name) fields.name = '빈 값은 안 됩니다'
+    names.forEach((n, i) => { if (!n) fields[`members.${i}`] = '빈 값은 안 됩니다' })
+    if (names.length < 2) fields.members = '2개 이상이어야 합니다'
+    else if (!Object.keys(fields).some((k) => k.startsWith('members.'))) {
+      const dup = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))].sort()
+      if (dup.length) fields.members = `같은 이름이 있습니다: ${dup.join(', ')}`
+    }
+    if (Object.keys(fields).length) fail(422, 'VALIDATION_ERROR', '입력값을 확인해 주세요.', fields)
     const r = {
       room_token: newToken(), name, rounding: body.rounding ?? 'WON_1', created_at: now(),
       members: names.map((n, i) => ({ id: db.seq++, name: n, order: i + 1 })),

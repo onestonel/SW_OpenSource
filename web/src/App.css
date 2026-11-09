@@ -154,7 +154,9 @@
 .muted-13 { font-size: 13px; } .muted-14 { font-size: 14px; } .muted-15 { font-size: 15px; }
 .faint { color: #8a8a92; }
 .ellipsis { font-size: 14px; color: #3a3a40; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.error-text { margin: 0; font-size: 14px; font-weight: 700; color: var(--error); }
+.error-text { font-size: 14px; font-weight: 700; color: var(--error); }
+.error-text p, .error-text ul { margin: 0; }
+.error-text ul { padding-left: 18px; font-weight: 500; }
 .copied { margin: 0; text-align: center; font-size: 14px; font-weight: 700; color: var(--link); }
 
 .card-pad { padding: 16px 18px; border-radius: 18px; }
