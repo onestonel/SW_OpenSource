@@ -17,4 +17,8 @@ test('health: 정상 · DB만 꺼짐 · 서버 꺼짐', async () => {
 
   globalThis.fetch = () => Promise.reject(new TypeError('Failed to fetch'))
   assert.equal(await checkHealth(), 'fail')
+
+  // 제한 시간이 지나 요청이 끊기면 (AbortSignal.timeout) 연결 안 됨
+  globalThis.fetch = () => Promise.reject(new DOMException('timed out', 'TimeoutError'))
+  assert.equal(await checkHealth(), 'fail')
 })
