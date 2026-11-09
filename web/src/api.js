@@ -36,7 +36,8 @@ async function request(method, path, body) {
 // 200 {"status":"ok"} → 'ok' · 503 {"db":"error"} → 'db' (서버는 켜졌고 DB만 꺼짐) · 그 밖(연결 실패 포함) → 'fail'
 export async function checkHealth() {
   try {
-    const res = await fetch(`${API_BASE_URL}/health`)
+    // 5초 안에 답이 없으면 '연결 안 됨' (없으면 '확인 중…'에서 멈춘다)
+    const res = await fetch(`${API_BASE_URL}/health`, { signal: AbortSignal.timeout(5000) })
     const body = await res.json().catch(() => null)
     if (res.ok && body?.status === 'ok') return 'ok'
     return res.status === 503 && body?.db === 'error' ? 'db' : 'fail'
@@ -45,13 +46,16 @@ export async function checkHealth() {
   }
 }
 
-// 주소 · 모양은 docs/api-v1.md (PR #17 초안)를 따른다
+// 주소 · 모양은 docs/api-v1.md (PR #17)를 따른다
 const room = (t) => `/rooms/${encodeURIComponent(t)}`
 
+// 명세서 2절: order는 1, 3, 4처럼 빌 수 있어서 화면에 번호로 보여 주지 않고 정렬에만 쓴다
+const sortMembers = (r) => ({ ...r, members: [...r.members].sort((a, b) => a.order - b.order) })
+
 export const api = {
-  createRoom: (body) => request('POST', '/rooms', body),
-  getRoom: (t) => request('GET', room(t)),
-  updateRoom: (t, body) => request('PATCH', room(t), body),
+  createRoom: (body) => request('POST', '/rooms', body).then(sortMembers),
+  getRoom: (t) => request('GET', room(t)).then(sortMembers),
+  updateRoom: (t, body) => request('PATCH', room(t), body).then(sortMembers),
 
   listReceipts: (t) => request('GET', `${room(t)}/receipts`),
   createReceipt: (t, body) => request('POST', `${room(t)}/receipts`, body),
