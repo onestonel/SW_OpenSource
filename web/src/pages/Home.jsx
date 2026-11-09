@@ -11,6 +11,7 @@ const STEPS = [
 const STATUS_TEXT = {
   checking: '서버 확인 중…',
   ok: '서버 연결됨',
+  db: '서버 연결됨 · DB 연결 안 됨',
   fail: '서버 연결 안 됨',
 }
 
@@ -18,9 +19,7 @@ function ServerStatus() {
   const [status, setStatus] = useState('checking')
 
   useEffect(() => {
-    checkHealth()
-      .then((ok) => setStatus(ok ? 'ok' : 'fail'))
-      .catch(() => setStatus('fail'))
+    checkHealth().then(setStatus)
   }, [])
 
   return (
