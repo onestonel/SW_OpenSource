@@ -1,0 +1,18 @@
+[project]
+name = "settle-server"
+version = "0.1.0"
+description = "같이정산 서버 (FastAPI)"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# 한글 주석·문구는 폭 계산이 달라 줄 길이 검사에서 뺀다
+ignore = ["E501", "B008"]
