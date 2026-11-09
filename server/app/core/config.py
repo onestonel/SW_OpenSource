@@ -1,9 +1,12 @@
-"""환경 변수 → Settings. DB 주소 등은 해당 기능을 넣는 PR에서 더한다."""
+"""환경 변수 → Settings."""
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+
+# docker compose의 db 컨테이너에 내 컴퓨터에서 붙을 때 주소. 컨테이너 안에서는 compose가 db:5432로 넣어 준다.
+DEFAULT_DATABASE_URL = "postgresql+psycopg://app:app@localhost:5432/settle"
 
 
 def _list(value: str) -> list[str]:
@@ -12,11 +15,13 @@ def _list(value: str) -> list[str]:
 
 @dataclass(frozen=True)
 class Settings:
+    database_url: str = DEFAULT_DATABASE_URL
     cors_origins: list[str] = field(default_factory=lambda: ["http://localhost:3000"])
 
 
 def load_settings() -> Settings:
     return Settings(
+        database_url=os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL),
         cors_origins=_list(os.getenv("CORS_ORIGINS", "http://localhost:3000")),
     )
 
