@@ -20,8 +20,11 @@ async function request(method, path, body) {
       method,
       headers: body && !isForm ? { 'Content-Type': 'application/json' } : undefined,
       body: body && !isForm ? JSON.stringify(body) : body,
+      // 서버가 답 없이 멈춰도 화면이 계속 기다리지 않게 (사진은 10MB까지라 더 길게)
+      signal: AbortSignal.timeout(isForm ? 60000 : 10000),
     })
-  } catch {
+  } catch (e) {
+    if (e.name === 'TimeoutError') throw new ApiError(0, 'TIMEOUT', '서버 응답이 너무 늦어요. 잠시 뒤 다시 시도해 주세요.')
     throw new ApiError(0, 'NETWORK_ERROR', '서버에 연결할 수 없어요. 잠시 뒤 다시 시도해 주세요.')
   }
   const data = res.status === 204 ? null : await res.json().catch(() => null)
