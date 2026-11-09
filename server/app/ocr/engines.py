@@ -81,7 +81,7 @@ class TesseractEngine:
     name = "tesseract"
     needs_image = True
 
-    def __init__(self, lang: str = "kor", psm: int = 6, cmd: str | None = None, space_ratio: float = 0.3):
+    def __init__(self, lang: str = "kor", psm: int = 6, cmd: str | None = None, space_ratio: float = 0.65):
         try:
             import pytesseract
         except ImportError as e:
