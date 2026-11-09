@@ -45,6 +45,11 @@
   background: var(--success-bg);
 }
 
+.server-status--db {
+  color: #9a4a00;
+  background: rgba(230, 140, 20, 0.15);
+}
+
 .server-status--fail {
   color: var(--error);
   background: rgba(180, 35, 35, 0.1);
