@@ -143,3 +143,37 @@ class ReceiptOut(Out):
     check: ReceiptCheckOut
     photo_url: str | None = Field(description="사진이 없으면 null")
     created_at: Timestamp
+
+
+# ------------------------------------------------------------------ 정산 결과 (5단계)
+
+class SettlementMemberOut(Out):
+    member_id: int
+    name: str
+    paid: int = Field(description="낸 돈 (결제한 영수증 총액의 합)")
+    owed: int = Field(description="내야 할 돈")
+    net: int = Field(description="paid − owed. 양수면 받을 돈, 음수면 보낼 돈")
+
+
+class TransferOut(Out):
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_: PayerOut = Field(alias="from", description="보내는 사람")
+    to: PayerOut = Field(description="받는 사람")
+    amount: int
+
+
+class ExcludedReceiptOut(Out):
+    id: int
+    store_name: str
+
+
+class SettlementOut(Out):
+    version: int = Field(description="다시 계산할 때마다 1씩 올라간다")
+    created_at: Timestamp = Field(description="계산한 시각")
+    rounding: Rounding = Field(description="계산할 때 쓴 원 단위")
+    is_stale: bool = Field(description="true면 계산 뒤에 영수증 · 체크 · 구성원 · 원 단위가 바뀌었다 → '다시 계산' 안내")
+    members: list[SettlementMemberOut] = Field(description="구성원 순서")
+    transfers: list[TransferOut] = Field(description="같은 두 사람 사이는 하나로 합친 송금 목록")
+    excluded_receipts: list[ExcludedReceiptOut] = Field(description="아직 확인 중이라 계산에서 빠진 영수증")
+    copy_text: str = Field(description="'송금 목록 복사' 버튼이 그대로 복사할 글")
