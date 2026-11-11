@@ -38,16 +38,9 @@ class Out(BaseModel):
 class RoomCreateIn(In):
     name: str = Field(min_length=1, max_length=50, description="정산방 이름 (예: 제주 여행)")
     members: list[MemberName] = Field(min_length=2, max_length=50,
-                                      description="구성원 이름. 2명 이상, 빈 이름·같은 이름 불가. 입력한 순서가 구성원 순서")
+                                      description="구성원 이름. 2명 이상, 빈 이름 불가. 같은 이름은 409 MEMBER_NAME_DUPLICATE. "
+                                                  "입력한 순서가 구성원 순서")
     rounding: Rounding = Field(default="WON_1", description="WON_1 = 1원 단위(기본), WON_10 = 10원 단위 올림")
-
-    @field_validator("members")
-    @classmethod
-    def _unique(cls, members: list[str]) -> list[str]:
-        dup = sorted({n for n in members if members.count(n) > 1})
-        if dup:
-            raise ValueError(f"같은 이름이 있습니다: {', '.join(dup)}")
-        return members
 
 
 class RoomUpdateIn(In):

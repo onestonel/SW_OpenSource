@@ -1,7 +1,7 @@
 """정산방 · 구성원 API (V1 요구 명세 1단계 · API 약속서 2장).
 
 - 로그인이 없다. 정산방을 만들면 room_token이 나오고, 총무는 이 키가 든 링크로 다시 들어온다.
-- 정산방을 만들 때 구성원 이름을 함께 받는다. 서버 검사: 2명 이상, 빈 이름 없음 (같은 이름도 불가).
+- 정산방을 만들 때 구성원 이름을 함께 받는다. 서버 검사: 2명 이상, 빈 이름 없음 (422). 같은 이름은 409.
 - 원 단위 rounding: WON_1 = 1원 단위(기본), WON_10 = 10원 단위 올림.
 """
 
@@ -49,6 +49,10 @@ def _detail(room: Room) -> RoomDetailOut:
 
 @router.post("", response_model=RoomOut, status_code=201, summary="정산방 만들기")
 def create_room(body: RoomCreateIn, db: DB) -> RoomOut:
+    dup = sorted({n for n in body.members if body.members.count(n) > 1})
+    if dup:  # API 명세서 2절: 구성원 추가와 같은 409
+        raise AppError(409, "MEMBER_NAME_DUPLICATE", f"같은 이름의 구성원이 있습니다: {', '.join(dup)}",
+                       {"names": dup})
     room = Room(room_token=_new_token(db), name=body.name, rounding=body.rounding)
     room.members = [Member(name=n, display_order=i) for i, n in enumerate(body.members, start=1)]
     db.add(room)
