@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, StringConstraints, ValidationInfo, field_validator
 
 KST = ZoneInfo("Asia/Seoul")
 
@@ -20,6 +20,9 @@ def _iso(dt: datetime) -> str:
 Timestamp = Annotated[datetime, PlainSerializer(_iso, return_type=str)]
 MemberName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
 Rounding = Literal["WON_1", "WON_10"]
+ReceiptStatus = Literal["CHECKING", "CONFIRMED"]
+ItemKind = Literal["ITEM", "DISCOUNT"]
+MAX_AMOUNT = 100_000_000  # 한 줄 · 한 영수증 금액 상한 (1억 원). 잘못 친 숫자를 막는다
 
 
 class In(BaseModel):
@@ -35,16 +38,9 @@ class Out(BaseModel):
 class RoomCreateIn(In):
     name: str = Field(min_length=1, max_length=50, description="정산방 이름 (예: 제주 여행)")
     members: list[MemberName] = Field(min_length=2, max_length=50,
-                                      description="구성원 이름. 2명 이상, 빈 이름·같은 이름 불가. 입력한 순서가 구성원 순서")
+                                      description="구성원 이름. 2명 이상, 빈 이름 불가. 같은 이름은 409 MEMBER_NAME_DUPLICATE. "
+                                                  "입력한 순서가 구성원 순서")
     rounding: Rounding = Field(default="WON_1", description="WON_1 = 1원 단위(기본), WON_10 = 10원 단위 올림")
-
-    @field_validator("members")
-    @classmethod
-    def _unique(cls, members: list[str]) -> list[str]:
-        dup = sorted({n for n in members if members.count(n) > 1})
-        if dup:
-            raise ValueError(f"같은 이름이 있습니다: {', '.join(dup)}")
-        return members
 
 
 class RoomUpdateIn(In):
@@ -77,3 +73,73 @@ class RoomOut(Out):
 
 class RoomDetailOut(RoomOut):
     latest_settlement: LatestSettlementRef | None = Field(description="아직 한 번도 계산하지 않았으면 null")
+
+
+# ------------------------------------------------------------------ 영수증 (2 · 3단계)
+
+class ReceiptItemIn(In):
+    """영수증 한 줄. 고치기(PUT)에서는 이미 있는 줄에 id를 같이 보낸다."""
+
+    id: int | None = Field(default=None, description="고치기에서 이미 있는 줄의 id. 새 줄이면 뺀다")
+    name: str = Field(min_length=1, max_length=50, description="품목 이름 (할인 줄은 예: 할인)")
+    kind: ItemKind = Field(default="ITEM", description="ITEM = 품목, DISCOUNT = 할인")
+    amount: int = Field(ge=-MAX_AMOUNT, le=MAX_AMOUNT, description="정수 원. 품목은 0보다 크고, 할인은 0보다 작다")
+
+    @field_validator("amount")
+    @classmethod
+    def _sign(cls, amount: int, info: ValidationInfo) -> int:
+        kind = info.data.get("kind")  # kind가 잘못됐으면 그쪽 오류만 보여 준다
+        if kind == "ITEM" and amount <= 0:
+            raise ValueError("품목 금액은 0보다 커야 합니다")
+        if kind == "DISCOUNT" and amount >= 0:
+            raise ValueError("할인 금액은 0보다 작아야 합니다 (예: -5000)")
+        return amount
+
+
+class ReceiptIn(In):
+    """영수증 만들기 · 고치기. 품목 합 ≠ 총액이어도 막지 않는다 (답장의 check로 알려 준다)."""
+
+    store_name: str = Field(min_length=1, max_length=50, description="가게 이름 (예: 1차 식당)")
+    payer_member_id: int = Field(description="결제자. 이 정산방 구성원이어야 한다")
+    total_amount: int = Field(gt=0, le=MAX_AMOUNT, description="영수증 총액. 정산은 총액 기준이다")
+    items: list[ReceiptItemIn] = Field(max_length=100, description="품목 · 할인 줄. ITEM 줄이 1개 이상")
+
+    @field_validator("items")
+    @classmethod
+    def _items(cls, items: list[ReceiptItemIn]) -> list[ReceiptItemIn]:
+        if not any(i.kind == "ITEM" for i in items):
+            raise ValueError("품목(ITEM) 줄이 1개 이상 있어야 합니다")
+        ids = [i.id for i in items if i.id is not None]
+        if len(ids) != len(set(ids)):
+            raise ValueError("같은 줄 id가 두 번 들어 있습니다")
+        return items
+
+
+class PayerOut(Out):
+    id: int
+    name: str
+
+
+class ReceiptItemOut(Out):
+    id: int
+    name: str
+    amount: int
+    kind: ItemKind
+
+
+class ReceiptCheckOut(Out):
+    items_sum: int = Field(description="할인을 포함한 모든 줄의 합")
+    difference: int = Field(description="total_amount − items_sum")
+    is_matched: bool = Field(description="false면 화면에 '품목 합 ≠ 총액' 경고 (확정은 그대로 가능)")
+
+
+class ReceiptOut(Out):
+    id: int
+    store_name: str
+    payer: PayerOut
+    status: ReceiptStatus = Field(description="CHECKING = 확인 중, CONFIRMED = 확정 (정산에 들어감)")
+    total_amount: int
+    items: list[ReceiptItemOut]
+    check: ReceiptCheckOut
+    photo_url: str | None = Field(description="사진이 없으면 null")
+    created_at: Timestamp

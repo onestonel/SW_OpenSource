@@ -55,6 +55,12 @@ def field_reason(err: dict[str, Any]) -> str:
         return f"{ctx.get('max_length')}개 이하여야 합니다"
     if kind == "literal_error":
         return f"{str(ctx.get('expected')).replace(' or ', ' 또는 ')} 중 하나여야 합니다"
+    if kind == "greater_than":
+        return f"{ctx.get('gt')}보다 커야 합니다"
+    if kind == "greater_than_equal":
+        return f"{ctx.get('ge'):,} 이상이어야 합니다"
+    if kind == "less_than_equal":
+        return f"{ctx.get('le'):,} 이하여야 합니다"
     if kind in ("int_parsing", "int_type"):
         return "정수여야 합니다"
     if kind == "extra_forbidden":

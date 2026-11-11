@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter
 
-from . import health, rooms
+from . import health, receipts, rooms
 
 router = APIRouter(prefix="/api/v1")
-for module in (health, rooms):
+for module in (health, rooms, receipts):
     router.include_router(module.router)

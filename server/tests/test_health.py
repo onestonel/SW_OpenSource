@@ -73,3 +73,21 @@ def test_unhandled_error_keeps_request_id_and_cors():
 def test_api_docs(client):
     assert client.get("/docs").status_code == 200
     assert "/api/v1/health" in client.get("/openapi.json").json()["paths"]
+
+
+def test_migrate_failure_logs_full_error(monkeypatch, caplog):
+    """migrate()가 실패하면 오류 종류만이 아니라 메시지와 traceback 전체가 로그에 남는다."""
+    from alembic import command
+
+    from app import main
+
+    def boom(*_args, **_kw):
+        raise RuntimeError("relation \"members\" does not exist")
+
+    monkeypatch.setattr(command, "upgrade", boom)
+    with caplog.at_level("ERROR", logger="settle"):
+        main.migrate()  # 서버를 멈추지 않는다
+    record = next(r for r in caplog.records if r.name == "settle")
+    assert record.levelname == "ERROR" and "DB migration failed" in record.getMessage()
+    assert record.exc_info is not None
+    assert 'relation "members" does not exist' in caplog.text and "Traceback" in caplog.text
