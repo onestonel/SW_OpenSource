@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 from ...core.errors import AppError, validation_error
 from ...models import Member, Receipt, ReceiptItem, ReceiptItemPayer, Room
 from ...schemas import PayerOut, ReceiptCheckOut, ReceiptIn, ReceiptItemOut, ReceiptOut
+from ...settlement_store import mark_stale
 from ..deps import DB, CurrentRoom
 
 router = APIRouter(prefix="/rooms/{room_token}/receipts", tags=["receipts"])
@@ -144,6 +145,7 @@ def update_receipt(body: ReceiptIn, room: CurrentRoom, receipt: CurrentReceipt, 
 def delete_receipt(receipt: CurrentReceipt, db: DB) -> Response:
     if receipt.status == "CONFIRMED":
         raise _confirmed_error()
+    # 확인 중인 영수증은 계산에 들어가지 않으므로 '최신 아님'으로 만들지 않는다 (app/settlement_store.py)
     # 사진 파일 지우기는 사진 PR(#21)이 영수증 주소로 옮겨 올 때 같이 붙인다
     db.delete(receipt)
     db.commit()
@@ -156,7 +158,8 @@ def delete_receipt(receipt: CurrentReceipt, db: DB) -> Response:
 def confirm_receipt(room: CurrentRoom, receipt: CurrentReceipt, db: DB) -> ReceiptOut:
     """품목 합 ≠ 총액이어도 확정된다. 이미 확정된 영수증이면 그대로 돌려준다."""
     if receipt.status != "CONFIRMED":
-        receipt.status = "CONFIRMED"  # 정산 결과 PR에서: 최신 정산을 '최신 아님'으로
+        receipt.status = "CONFIRMED"
+        mark_stale(db, room.id)
         db.commit()
         db.refresh(receipt)
     return receipt_out(room, receipt)
@@ -166,7 +169,8 @@ def confirm_receipt(room: CurrentRoom, receipt: CurrentReceipt, db: DB) -> Recei
 def unconfirm_receipt(room: CurrentRoom, receipt: CurrentReceipt, db: DB) -> ReceiptOut:
     if receipt.status != "CONFIRMED":
         raise AppError(409, "RECEIPT_NOT_CONFIRMED", "확정된 영수증만 확정 취소할 수 있습니다.")
-    receipt.status = "CHECKING"  # 정산 결과 PR에서: 최신 정산을 '최신 아님'으로
+    receipt.status = "CHECKING"
+    mark_stale(db, room.id)
     db.commit()
     db.refresh(receipt)
     return receipt_out(room, receipt)

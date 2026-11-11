@@ -15,7 +15,16 @@ from sqlalchemy.exc import IntegrityError
 
 from ...core.errors import AppError
 from ...models import Member, Receipt, Room
-from ...schemas import MemberCreateIn, MemberOut, RoomCreateIn, RoomDetailOut, RoomOut, RoomUpdateIn
+from ...schemas import (
+    LatestSettlementRef,
+    MemberCreateIn,
+    MemberOut,
+    RoomCreateIn,
+    RoomDetailOut,
+    RoomOut,
+    RoomUpdateIn,
+)
+from ...settlement_store import latest_settlement, mark_stale
 from ..deps import DB, CurrentRoom
 
 router = APIRouter(prefix="/rooms", tags=["rooms"])
@@ -40,9 +49,10 @@ def _room(room: Room) -> RoomOut:
                    members=[_member(m) for m in room.members], created_at=room.created_at)
 
 
-def _detail(room: Room) -> RoomDetailOut:
-    # 정산 버전은 정산 결과 PR에서 채운다. 그 전까지는 항상 '아직 계산 안 함'
-    return RoomDetailOut(**_room(room).model_dump(), latest_settlement=None)
+def _detail(db, room: Room) -> RoomDetailOut:
+    s = latest_settlement(db, room.id)
+    ref = LatestSettlementRef(version=s.version, is_stale=s.is_stale) if s else None
+    return RoomDetailOut(**_room(room).model_dump(), latest_settlement=ref)
 
 
 # ------------------------------------------------------------------ 정산방
@@ -62,19 +72,20 @@ def create_room(body: RoomCreateIn, db: DB) -> RoomOut:
 
 
 @router.get("/{room_token}", response_model=RoomDetailOut, summary="정산방 정보 보기")
-def get_room(room: CurrentRoom) -> RoomDetailOut:
-    return _detail(room)
+def get_room(room: CurrentRoom, db: DB) -> RoomDetailOut:
+    return _detail(db, room)
 
 
 @router.patch("/{room_token}", response_model=RoomDetailOut, summary="이름 · 원 단위 바꾸기")
 def update_room(body: RoomUpdateIn, room: CurrentRoom, db: DB) -> RoomDetailOut:
     if body.name is not None:
         room.name = body.name
-    if body.rounding is not None:
-        room.rounding = body.rounding  # 정산 결과 PR에서: 바뀌면 최신 정산을 '최신 아님'으로
+    if body.rounding is not None and body.rounding != room.rounding:
+        room.rounding = body.rounding
+        mark_stale(db, room.id)
     db.commit()
     db.refresh(room)
-    return _detail(room)
+    return _detail(db, room)
 
 
 # ------------------------------------------------------------------ 구성원
@@ -88,6 +99,7 @@ def add_member(body: MemberCreateIn, room: CurrentRoom, db: DB) -> MemberOut:
     last = db.scalar(select(func.max(Member.display_order)).where(Member.room_id == room.id)) or 0
     member = Member(room_id=room.id, name=body.name, display_order=last + 1)
     db.add(member)
+    mark_stale(db, room.id)
     try:
         db.commit()
     except IntegrityError as e:  # 동시에 같은 이름을 추가한 경우
@@ -112,5 +124,6 @@ def delete_member(member_id: int, room: CurrentRoom, db: DB) -> Response:
                        f"영수증 결제자로 들어가 있어 지울 수 없습니다. 먼저 결제자를 바꿔 주세요. (영수증: {names})",
                        {"receipt_ids": [r.id for r in paid]})
     db.delete(member)
+    mark_stale(db, room.id)
     db.commit()
     return Response(status_code=204)
