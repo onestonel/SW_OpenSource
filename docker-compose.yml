@@ -1,0 +1,98 @@
+# 같이정산 개발용 Docker Compose
+#
+#   docker compose up            화면 + 서버 + DB 켜기
+#   docker compose up db server  화면 없이 서버 + DB만 켜기
+#   docker compose --profile llm up   LLM 서버까지 켜기 (V3)
+#   docker compose down          끄기 (DB 데이터는 남음)
+#   docker compose down -v       끄고 DB 데이터까지 지우기
+#
+# 각자 폴더(web/, server/)를 그대로 컨테이너에 연결해서, 코드를 고치면 바로 반영된다.
+# 비밀번호 같은 값은 .env.example을 .env로 복사해서 바꾼다 (.env는 커밋하지 않는다).
+
+name: gachi-jeongsan
+
+services:
+  # ── DB ─────────────────────────────────────────────
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-settle}
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-settle}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── 서버 (백엔드 · server/) ─────────────────────────
+  server:
+    image: python:3.12-slim
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@db:5432/${POSTGRES_DB:-settle}
+      CORS_ORIGINS: http://localhost:3000
+      RECEIPT_STORAGE_PATH: /data/receipts
+      NL_PROVIDER: ${NL_PROVIDER:-stub}
+      NL_BASE_URL: http://llm:8080/v1
+      TZ: Asia/Seoul
+      WATCHFILES_FORCE_POLLING: "true" # Windows에서 파일을 고쳐도 자동 재시작되게
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./server:/app
+      - receipt_files:/data/receipts
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 40s
+
+  # ── 화면 (프론트엔드 · web/) ────────────────────────
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3000"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000/api/v1
+      CHOKIDAR_USEPOLLING: "true" # Windows에서 파일을 고쳐도 화면이 바로 바뀌게
+      TZ: Asia/Seoul
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./web:/app
+      - web_node_modules:/app/node_modules
+    depends_on:
+      - server
+
+  # ── LLM 서버 (V3 · --profile llm 일 때만) ───────────
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    profiles: ["llm"]
+    command: >
+      -hf LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct-GGUF:Q4_K_M
+      --host 0.0.0.0 --port 8080
+    environment:
+      LLAMA_CACHE: /models
+    ports:
+      - "8080:8080"
+    volumes:
+      - llm_models:/models
+
+volumes:
+  postgres_data: # DB 데이터
+  receipt_files: # 영수증 사진
+  web_node_modules: # 화면 라이브러리 (Windows 폴더와 섞이지 않게 따로 둠)
+  llm_models: # LLM 모델 파일 (처음 한 번만 받음)

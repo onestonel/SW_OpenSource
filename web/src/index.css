@@ -1,0 +1,109 @@
+/* 디자인 값: HANDOFF 7. 화면 목업 · 디자인 값 */
+:root {
+  --text: #1c1c1e;
+  --text-sub: #55555c;
+  --link: #0a5fcc;
+  --success: #17753a;
+  --success-bg: rgba(30, 158, 74, 0.12);
+  --error: #b42323;
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.9);
+  --glass-shadow: 0 4px 16px rgba(30, 41, 59, 0.06);
+  --primary: linear-gradient(135deg, #0a6af0, #5b4fe0);
+
+  font-family: 'Noto Sans KR', -apple-system, 'Apple SD Gothic Neo', sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(160deg, #f4f7ff 0%, #f7f5ff 100%);
+}
+
+a {
+  color: var(--link);
+}
+
+/* 휴대폰 폭(390px) 기준 화면 틀 + 배경의 흐린 원 2개 */
+.page {
+  position: relative;
+  max-width: 390px;
+  min-height: 100vh;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.page::before,
+.page::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  pointer-events: none;
+}
+
+.page::before {
+  left: -120px;
+  top: -110px;
+  width: 340px;
+  height: 340px;
+  background: #c9dcff;
+  opacity: 0.75;
+}
+
+.page::after {
+  right: -140px;
+  bottom: -120px;
+  width: 360px;
+  height: 360px;
+  background: #dcd6ff;
+  opacity: 0.7;
+}
+
+.page-inner {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  padding: 64px 24px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  box-shadow: var(--glass-shadow);
+}
+
+.btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 54px;
+  border: 0;
+  border-radius: 27px;
+  background: var(--primary);
+  color: #fff;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 8px 20px rgba(10, 106, 240, 0.3);
+  cursor: pointer;
+}
+
+.btn-primary:focus-visible {
+  outline: 3px solid var(--link);
+  outline-offset: 3px;
+}

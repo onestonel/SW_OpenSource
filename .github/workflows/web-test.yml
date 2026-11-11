@@ -1,0 +1,31 @@
+# web/ 자동 테스트: lint + test + build. web/ 를 바꾸는 PR(develop·main 대상)에서 돈다.
+name: web-test
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths: ["web/**", ".github/workflows/web-test.yml"]
+  push:
+    branches: [develop, main]
+    paths: ["web/**", ".github/workflows/web-test.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22" # docker-compose.yml의 node:22-alpine과 같게
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
