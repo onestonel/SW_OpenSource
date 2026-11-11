@@ -1,4 +1,4 @@
-# web/ 자동 테스트: lint + build. web/ 를 바꾸는 PR(develop·main 대상)에서 돈다.
+# web/ 자동 테스트: lint + test + build. web/ 를 바꾸는 PR(develop·main 대상)에서 돈다.
 name: web-test
 
 on:
@@ -25,5 +25,7 @@ jobs:
       - run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Test
+        run: npm test
       - name: Build
         run: npm run build
