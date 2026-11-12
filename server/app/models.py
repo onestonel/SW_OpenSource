@@ -1,4 +1,4 @@
-"""DB 테이블. V1 요구 명세 순서대로 늘려 간다 (지금: ① 정산방 · 구성원, ②~④ 영수증 · 품목 · 품목별 내는 사람).
+"""DB 테이블. V1 요구 명세 순서대로 늘려 간다 (① 정산방 · 구성원, ②~④ 영수증 · 품목 · 품목별 내는 사람, ⑤ 정산 결과).
 
 로그인이 없다. 정산방은 추측하기 어려운 room_token이 든 링크로만 찾는다.
 테이블을 바꾸면 Alembic 마이그레이션을 같이 만든다 (server/migrations/versions/).
@@ -8,7 +8,18 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    false,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -136,3 +147,26 @@ class ReceiptItemPayer(Base):
                                            index=True)
 
     item: Mapped[ReceiptItem] = relationship(back_populates="payers")
+
+
+class Settlement(Base):
+    """정산 결과 한 버전. 총무가 '다시 계산'을 누를 때만 새로 만든다 (자동 계산 없음).
+
+    result는 그때 계산한 답장 그대로다 (구성원 이름 · 송금 목록 · 복사할 글). 나중에 구성원 이름이 바뀌거나
+    지워져도 그 버전의 결과는 그대로 남는다. 화면에는 최신 버전만 보여 준다.
+    계산 뒤에 영수증 확정 · 체크 · 구성원 · 원 단위가 바뀌면 is_stale을 켠다 ('최신 아님').
+    """
+
+    __tablename__ = "settlements"
+    __table_args__ = (
+        UniqueConstraint("room_id", "version", name="uq_settlements_room_version"),
+        CheckConstraint("rounding IN ('WON_1', 'WON_10')", name="ck_settlements_rounding"),
+    )
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    rounding: Mapped[str] = mapped_column(String(8))
+    result: Mapped[dict] = mapped_column(JSON)
+    is_stale: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    created_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
