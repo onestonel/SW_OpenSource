@@ -30,8 +30,9 @@ def migrate() -> None:
     cfg.attributes["configure_logger"] = False
     try:
         command.upgrade(cfg, "head")
-    except Exception as e:  # DB 연결 실패 등
-        log.warning("DB migration skipped: %s", e.__class__.__name__)
+    except Exception:  # DB 연결 실패, 마이그레이션 코드 오류 등
+        # 오류 종류만 남기면 원인을 알 수 없다. 메시지와 traceback 전체를 남긴다
+        log.exception("DB migration failed — 서버는 켜지만 DB를 쓰는 API는 실패합니다 (/health가 503)")
 
 
 @asynccontextmanager
