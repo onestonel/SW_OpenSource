@@ -54,6 +54,9 @@ class Api:
     def post(self, url, json=None, expect=201):
         return self.call("POST", url, expect, json=json)
 
+    def put(self, url, json=None, expect=200):
+        return self.call("PUT", url, expect, json=json)
+
     def patch(self, url, json=None, expect=200):
         return self.call("PATCH", url, expect, json=json)
 

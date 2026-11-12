@@ -41,12 +41,19 @@ def test_member_names_are_trimmed(api):
 @pytest.mark.parametrize(("members", "reason"), [
     ([], "2개 이상이어야 합니다"),
     (["A"], "2개 이상이어야 합니다"),
-    (["A", "A"], "같은 이름이 있습니다: A"),
 ])
 def test_member_count_and_duplicates(api, members, reason):
     res = api.post("/rooms", {"name": "x", "members": members}, expect=422)
     assert error(res) == {"code": "VALIDATION_ERROR", "message": "입력값을 확인해 주세요.",
                           "details": {"fields": {"members": reason}}}
+
+
+@pytest.mark.parametrize(("members", "names"), [(["A", "A"], ["A"]), (["B", "A", " B", "A ", "C"], ["A", "B"])])
+def test_duplicate_member_names_conflict(api, members, names):
+    """API 명세서 2절: 같은 이름이 있으면 409 MEMBER_NAME_DUPLICATE (구성원 추가와 같다). 앞뒤 공백은 빼고 비교한다."""
+    res = api.post("/rooms", {"name": "x", "members": members}, expect=409)
+    assert error(res) == {"code": "MEMBER_NAME_DUPLICATE", "message": f"같은 이름의 구성원이 있습니다: {', '.join(names)}",
+                          "details": {"names": names}}
 
 
 @pytest.mark.parametrize(("members", "field", "reason"), [
