@@ -37,6 +37,7 @@ a {
   min-height: 100vh;
   margin: 0 auto;
   overflow: hidden;
+  overflow: clip; /* hidden은 position: sticky(사진 크게 보기)를 막는다 */
 }
 
 .page::before,
