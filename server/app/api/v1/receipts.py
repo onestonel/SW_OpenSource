@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Path, Response
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from ... import storage
 from ...core.errors import AppError, validation_error
 from ...models import Member, Receipt, ReceiptItem, ReceiptItemPayer, Room
 from ...schemas import PayerOut, ReceiptCheckOut, ReceiptIn, ReceiptItemOut, ReceiptOut
@@ -147,8 +148,10 @@ def delete_receipt(receipt: CurrentReceipt, db: DB) -> Response:
         raise _confirmed_error()
     # 확인 중인 영수증은 계산에 들어가지 않으므로 '최신 아님'으로 만들지 않는다 (app/settlement_store.py)
     # 사진 파일 지우기는 사진 PR(#21)이 영수증 주소로 옮겨 올 때 같이 붙인다
+    photo_name = receipt.photo_path
     db.delete(receipt)
     db.commit()
+    storage.delete_photo(photo_name)  # DB에서 지운 뒤에 사진 파일도 지운다
     return Response(status_code=204)
 
 
