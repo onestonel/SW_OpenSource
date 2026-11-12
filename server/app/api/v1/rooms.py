@@ -12,9 +12,10 @@ import secrets
 from fastapi import APIRouter, Response
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
 from ...core.errors import AppError
-from ...models import Member, Receipt, Room
+from ...models import Member, Receipt, ReceiptItem, ReceiptItemPayer, Room
 from ...schemas import (
     LatestSettlementRef,
     MemberCreateIn,
@@ -90,6 +91,17 @@ def update_room(body: RoomUpdateIn, room: CurrentRoom, db: DB) -> RoomDetailOut:
 
 # ------------------------------------------------------------------ 구성원
 
+def _items_only_checked_by(db, member: Member) -> list[ReceiptItem]:
+    """이 구성원 한 명만 체크된 품목(ITEM) 줄. 할인 줄은 원래 체크가 없으므로 보지 않는다."""
+    items = db.scalars(
+        select(ReceiptItem).join(ReceiptItemPayer)
+        .where(ReceiptItemPayer.member_id == member.id, ReceiptItem.kind == "ITEM")
+        .options(selectinload(ReceiptItem.payers), selectinload(ReceiptItem.receipt))
+        .order_by(ReceiptItem.receipt_id, ReceiptItem.position, ReceiptItem.id)
+    ).all()
+    return [i for i in items if len(i.payers) == 1]
+
+
 @router.post("/{room_token}/members", response_model=MemberOut, status_code=201, summary="구성원 추가")
 def add_member(body: MemberCreateIn, room: CurrentRoom, db: DB) -> MemberOut:
     """새 구성원은 맨 뒤 순서. 이미 있는 품목 체크에는 들어가지 않는다 (체크 표에서 켠다)."""
@@ -110,7 +122,11 @@ def add_member(body: MemberCreateIn, room: CurrentRoom, db: DB) -> MemberOut:
 
 @router.delete("/{room_token}/members/{member_id}", status_code=204, summary="구성원 삭제")
 def delete_member(member_id: int, room: CurrentRoom, db: DB) -> Response:
-    """이 사람이 체크된 품목에서도 체크를 같이 지운다 (ON DELETE CASCADE)."""
+    """이 사람이 체크된 품목에서도 체크를 같이 지운다 (ON DELETE CASCADE).
+
+    이 사람만 체크된 품목이 있으면 지우지 않는다 (지우면 아무도 체크하지 않은 품목이 생긴다).
+    확인 중인 영수증의 품목도 본다. 나중에 확정하면 그대로 계산에 들어가기 때문이다.
+    """
     member = db.get(Member, member_id)
     if member is None or member.room_id != room.id:
         raise AppError(404, "NOT_FOUND", "구성원을 찾을 수 없습니다.")
@@ -123,6 +139,12 @@ def delete_member(member_id: int, room: CurrentRoom, db: DB) -> Response:
         raise AppError(409, "MEMBER_IN_USE",
                        f"영수증 결제자로 들어가 있어 지울 수 없습니다. 먼저 결제자를 바꿔 주세요. (영수증: {names})",
                        {"receipt_ids": [r.id for r in paid]})
+    only_me = _items_only_checked_by(db, member)
+    if only_me:
+        names = ", ".join(f"{i.receipt.store_name} - {i.name}" for i in only_me)
+        raise AppError(409, "MEMBER_IN_USE",
+                       f"이 사람만 체크된 품목이 있어 지울 수 없습니다. 먼저 다른 사람도 체크해 주세요. (품목: {names})",
+                       {"item_ids": [i.id for i in only_me]})
     db.delete(member)
     mark_stale(db, room.id)
     db.commit()

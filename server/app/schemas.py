@@ -145,6 +145,36 @@ class ReceiptOut(Out):
     created_at: Timestamp
 
 
+# ------------------------------------------------------------------ 체크 표 (4단계)
+
+class CheckMemberOut(Out):
+    id: int
+    name: str
+
+
+class CheckItemOut(Out):
+    item_id: int
+    receipt_id: int
+    store_name: str
+    name: str
+    amount: int
+    member_ids: list[int] = Field(description="이 품목을 나눠 내는 구성원 id (구성원 순서)")
+
+
+class ChecksOut(Out):
+    members: list[CheckMemberOut] = Field(description="구성원 순서")
+    items: list[CheckItemOut] = Field(description="확정된 영수증의 품목(ITEM) 줄만. 할인 줄은 체크하지 않는다")
+
+
+class CheckItemIn(In):
+    item_id: int
+    member_ids: list[int] = Field(description="이 품목을 나눠 낼 구성원 id. 빈 배열이면 422 CHECK_EMPTY")
+
+
+class ChecksIn(In):
+    items: list[CheckItemIn] = Field(description="바뀐 품목만 보내도 된다. 보내지 않은 품목의 체크는 그대로")
+
+
 # ------------------------------------------------------------------ 정산 결과 (5단계)
 
 class SettlementMemberOut(Out):
