@@ -39,7 +39,7 @@ test('검사: 구성원 2명 미만 · 확정 영수증 고치기', async () => 
   // 진짜 서버와 같은 모양: message는 공통 문구, 이유는 fields에
   await assert.rejects(req('POST', '/rooms', { name: 'x', members: ['A'] }), { status: 422, fields: { members: '2개 이상이어야 합니다' } })
   await assert.rejects(req('POST', '/rooms', { name: ' ', members: ['A', ''] }), { fields: { name: '빈 값은 안 됩니다', 'members.1': '빈 값은 안 됩니다' } })
-  await assert.rejects(req('POST', '/rooms', { name: 'x', members: ['A', 'B', 'A'] }), { fields: { members: '같은 이름이 있습니다: A' } })
+  await assert.rejects(req('POST', '/rooms', { name: 'x', members: ['A', 'B', 'A'] }), { status: 409, code: 'MEMBER_NAME_DUPLICATE', message: '같은 이름의 구성원이 있습니다: A' })
 
   const room = await req('POST', '/rooms', { name: 'x', members: ['A', 'B'] })
   const t = `/rooms/${room.room_token}`

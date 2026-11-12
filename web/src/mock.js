@@ -111,11 +111,10 @@ const routes = [
     if (!name) fields.name = '빈 값은 안 됩니다'
     names.forEach((n, i) => { if (!n) fields[`members.${i}`] = '빈 값은 안 됩니다' })
     if (names.length < 2) fields.members = '2개 이상이어야 합니다'
-    else if (!Object.keys(fields).some((k) => k.startsWith('members.'))) {
-      const dup = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))].sort()
-      if (dup.length) fields.members = `같은 이름이 있습니다: ${dup.join(', ')}`
-    }
     if (Object.keys(fields).length) fail(422, 'VALIDATION_ERROR', '입력값을 확인해 주세요.', fields)
+    // 명세서 2절 · 서버 rooms.py: 같은 이름은 구성원 추가와 같은 409
+    const dup = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))].sort()
+    if (dup.length) fail(409, 'MEMBER_NAME_DUPLICATE', `같은 이름의 구성원이 있습니다: ${dup.join(', ')}`)
     const r = {
       room_token: newToken(), name, rounding: body.rounding ?? 'WON_1', created_at: now(),
       members: names.map((n, i) => ({ id: db.seq++, name: n, order: i + 1 })),
