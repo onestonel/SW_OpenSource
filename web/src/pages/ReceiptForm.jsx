@@ -66,7 +66,8 @@ function Form({ room, receipt }) {
     setError(null)
     const body = {
       store_name: store,
-      payer_member_id: payer,
+      // 결제자를 안 골랐으면 빼서 보낸다 (null이면 서버가 "정수여야 합니다", 빼면 "필수")
+      ...(payer ? { payer_member_id: payer } : {}),
       total_amount: Number(total || 0),
       items: lines.map((l) => ({ ...(l.id ? { id: l.id } : {}), name: l.name, amount: signed(l), kind: l.kind })),
     }
@@ -170,7 +171,10 @@ function Form({ room, receipt }) {
         )}
 
         <div className="spacer" />
-        <ErrorText error={error} />
+        <ErrorText
+          error={error}
+          labels={{ store_name: '가게 이름', payer_member_id: '결제자', total_amount: '총액', items: '품목', name: '이름', amount: '금액' }}
+        />
         <button type="submit" className="btn-primary" disabled={busy}>저장</button>
         <p className="muted-13" style={{ textAlign: 'center' }}>저장하면 '확인 중' 상태가 돼요. 합이 안 맞아도 저장돼요.</p>
       </form>

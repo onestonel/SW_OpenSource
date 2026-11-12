@@ -43,12 +43,12 @@ export const StatusBadge = ({ status }) =>
     : <span className="badge badge--checking">확인 중</span>
 
 // 서버 message와 함께, 입력 검사 실패면 칸별 이유(details.fields)를 보여 준다.
-// labels: 칸 이름 → 화면 이름. "members.1"처럼 번호가 붙은 칸은 "구성원 2"로 보여 준다
+// labels: 칸 이름 → 화면 이름. "members.1"은 "구성원 2", "items.0.amount"는 "품목 1 금액"으로 보여 준다
 export function ErrorText({ error, labels = {} }) {
   if (!error) return null
   const reasons = Object.entries(error.fields ?? {}).map(([key, why]) => {
-    const [field, i] = key.split('.')
-    return `${labels[field] ?? field}${/^\d+$/.test(i ?? '') ? ` ${Number(i) + 1}` : ''}: ${why}`
+    const name = key.split('.').map((p) => (/^\d+$/.test(p) ? Number(p) + 1 : labels[p] ?? p)).join(' ')
+    return `${name}: ${why}`
   })
   return (
     <div className="error-text" role="alert">
