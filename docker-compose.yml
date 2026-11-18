@@ -100,7 +100,7 @@ services:
     image: ghcr.io/ggml-org/llama.cpp:server
     profiles: ["compare"]
     command: >
-      -hf ${LLM2_MODEL:-ggml-org/gemma-4-E4B-it-GGUF:Q4_K_M}
+      -hf ${LLM2_MODEL:-ggml-org/gemma-4-E4B-it-GGUF:Q4_0}
       --jinja -c 8192 --host 0.0.0.0 --port 8080
     environment:
       LLAMA_CACHE: /models
