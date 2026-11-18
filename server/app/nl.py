@@ -210,9 +210,7 @@ def _call_stub(room: RoomData, text: str) -> str:
     what = [it for it in room.items if it.name in text]
     has = lambda *keys: any(k in text for k in keys)  # noqa: E731
     if who and not what:
-        names = ", ".join(room.names[i] for i in who)
-        question = (f"어떤 메뉴인가요? 알려 주시면 {_josa(names, '을', '를')} 그 메뉴에서 뺄게요."
-                    if has("안 먹", "안 마", "안먹", "안마", "빼") else "어떤 품목인지 알려 주세요.")
+        question = menu_question(text, room) or "어떤 품목인지 알려 주세요."
         return json.dumps({"status": "NEEDS_CLARIFICATION", "proposals": [],
                            "clarification": {"question": question, "missing": ["item"]}}, ensure_ascii=False)
     if not who or not what:
@@ -256,6 +254,23 @@ class Checked:
 
 def _clarify(question: str | None = None) -> Checked:
     return Checked("NEEDS_CLARIFICATION", [], question or ASK_AGAIN)
+
+
+WHICH = re.compile(r"(\S+?)(?:은|는|을|를|도)?\s+안\s*(?:먹|마)")
+
+
+def menu_question(text: str, room: RoomData) -> str | None:
+    """"수아는 아침 안 먹었어"처럼 사람은 있는데 품목이 없으면, 무엇을 물을지와 답하면 무엇을 할지 같이 묻는다.
+
+    예: "아침 메뉴가 무엇인가요? 알려 주시면 수아를 그 메뉴에서 뺄게요."
+    """
+    names = [n for _, n in room.members if n in text]
+    if not names or not any(k in text for k in ("안 먹", "안 마", "안먹", "안마")):
+        return None
+    m = WHICH.search(text)
+    word = m.group(1) if m and not any(n in m.group(1) for n in names) else None
+    who = _josa(", ".join(names), "을", "를")
+    return f"{word + ' 메뉴가 무엇인가요' if word else '어떤 메뉴인가요'}? 알려 주시면 {who} 그 메뉴에서 뺄게요."
 
 
 ONLY = re.compile(r"(만|끼리)\s*(먹|마시|마셨|탔|타|했|하|썼|쓰|갔|가|샀|사|시켰|이용|$)")
@@ -314,6 +329,8 @@ def validate(raw: str, text: str, room: RoomData) -> Checked:
                        model_rules=["UNSUPPORTED"])
     if result["status"] == "NEEDS_CLARIFICATION":
         question = (result.get("clarification") or {}).get("question")
+        # 사람과 "안 먹었어"가 있으면, 답하면 무엇을 할지까지 말하는 질문으로 바꾼다 (모델 질문은 짧고 매번 다르다)
+        question = menu_question(text, room) or question
         c = _clarify(question if isinstance(question, str) and question.strip() else None)
         c.model_rules = ["NEEDS_CLARIFICATION"]
         return c
@@ -360,7 +377,8 @@ def _check_parsed(result: dict, text: str, room: RoomData, repairs: list[str]) -
         if any(room.names[i] not in text for i in ids):
             return _clarify("문장에 나온 사람을 찾지 못했어요. 구성원 이름을 그대로 써 주세요.")
         if items[item].name not in text:
-            return _clarify("문장에 나온 품목을 찾지 못했어요. 체크 표의 품목 이름을 그대로 써 주세요.")
+            return _clarify(menu_question(text, room)
+                            or "문장에 나온 품목을 찾지 못했어요. 체크 표의 품목 이름을 그대로 써 주세요.")
     return Checked("PARSED", list(merged.values()), "")
 
 

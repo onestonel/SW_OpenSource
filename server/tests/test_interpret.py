@@ -174,7 +174,7 @@ def test_excluding_everyone_asks_again(api, room, receipt, monkeypatch):
 def test_model_clarification_question_is_passed_through(api, room, receipt, monkeypatch):
     model_says(monkeypatch, {"status": "NEEDS_CLARIFICATION", "proposals": [],
                              "clarification": {"question": "어떤 품목인가요?", "missing": ["item"]}})
-    assert ask(api, room, "수아는 안 먹었어").json()["message"] == "어떤 품목인가요?"
+    assert ask(api, room, "그거는 따로 계산해 줘").json()["message"] == "어떤 품목인가요?"
 
 
 def test_unrelated_sentence(api, room, receipt, monkeypatch):
@@ -315,7 +315,7 @@ def test_follow_up_answer_is_joined_with_previous(api, room, monkeypatch):
 
     first = ask(api, room, "수아는 아침 안 먹었어").json()  # stub
     assert first["status"] == "NEEDS_CLARIFICATION"
-    assert first["message"] == "어떤 메뉴인가요? 알려 주시면 수아를 그 메뉴에서 뺄게요."
+    assert first["message"] == "아침 메뉴가 무엇인가요? 알려 주시면 수아를 그 메뉴에서 뺄게요."
     assert first["text"] == "수아는 아침 안 먹었어"
 
     seen = []
@@ -477,3 +477,19 @@ def test_report_script_runs(api, room, receipt, monkeypatch, tmp_path):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     assert mod.pct(0.5) == "50%" and mod.pct(None) == "-"
+
+
+@pytest.mark.parametrize("model_answer", [
+    # 11/18 실제 EXAONE: 품목을 짐작해서 냄 → 서버 검사에서 막힘
+    "guess",
+    # 모델이 스스로 되물음 (질문이 짧음)
+    {"status": "NEEDS_CLARIFICATION", "proposals": [], "clarification": {"question": "아침 메뉴가 무엇인가요?", "missing": ["item"]}},
+])
+def test_menu_question_says_what_happens_next(api, room, receipt, monkeypatch, model_answer):
+    if model_answer == "guess":
+        model_answer = parsed({"receipt_item_id": item_id(receipt, "삼겹살"), "type": "EXCLUDE",
+                               "params": {"member_ids": [ids(room)[3]]}})
+    model_says(monkeypatch, model_answer)
+    got = ask(api, room, "수아는 아침 안 먹었어").json()
+    assert got["status"] == "NEEDS_CLARIFICATION"
+    assert got["message"] == "아침 메뉴가 무엇인가요? 알려 주시면 수아를 그 메뉴에서 뺄게요."
