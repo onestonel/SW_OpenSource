@@ -94,6 +94,21 @@ services:
     volumes:
       - llm_models:/models
 
+  # ── 비교용 두 번째 LLM (필요할 때만: docker compose --profile compare up -d llm2) ──
+  # 기본은 Gemma 4 E4B. 다른 모델은 .env의 LLM2_MODEL로 바꾼다. 비교: scripts/compare_llm.py
+  llm2:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    profiles: ["compare"]
+    command: >
+      -hf ${LLM2_MODEL:-ggml-org/gemma-4-E4B-it-GGUF:Q4_K_M}
+      --jinja -c 8192 --host 0.0.0.0 --port 8080
+    environment:
+      LLAMA_CACHE: /models
+    ports:
+      - "8082:8080"
+    volumes:
+      - llm_models:/models
+
 volumes:
   postgres_data: # DB 데이터
   receipt_files: # 영수증 사진
