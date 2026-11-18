@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { api, won } from '../api.js'
+import { api, providerLabel, won } from '../api.js'
 import { useLoad } from '../hooks.js'
 import { BackLink, ErrorText, Loading, Page } from '../ui.jsx'
 
@@ -199,7 +199,7 @@ function SayBox({ token, members, chat, setChat, onApplied }) {
                 {m.result.changes.length > 0 && (m.applied
                   ? <span className="muted-13">✓ 체크 표에 반영했어요</span>
                   : <button type="button" className="btn-primary say-apply" disabled={busy} onClick={() => apply(n)}>반영</button>)}
-                <span className="muted-13">{m.result.provider !== 'stub' ? `EXAONE · ${(m.result.elapsed_ms / 1000).toFixed(1)}초` : '모델 없이 흉내(stub)'}</span>
+                <span className="muted-13">{providerLabel(m.result.provider)}{m.result.provider !== 'stub' && ` · ${(m.result.elapsed_ms / 1000).toFixed(1)}초`}</span>
               </div>
             )))}
         </div>

@@ -37,6 +37,8 @@ def main() -> None:
     print(f"반영 비율: {s['applied']}/{s['proposals']} ({pct(s['apply_rate'])})"
           f"   반영 뒤 손으로 고침: {s['fixed_after_apply']}/{s['applied']} ({pct(s['fix_rate'])})")
     print(f"서버 보정: {s['repaired_entries']}건 — " + (", ".join(f"{k} {v}" for k, v in s["repairs"].items()) or "없음"))
+    print("해석기:    " + ", ".join(f"{k} {v}" for k, v in s["by_provider"].items())
+          + f"   (큰 모델로 넘김 {s['escalated']}건)")
     t = s["elapsed_ms"]
     print(f"걸린 시간: 평균 {t['avg'] or '-'}ms, 최대 {t['max'] or '-'}ms (stub 제외)\n")
     m = s["rule_matrix"]

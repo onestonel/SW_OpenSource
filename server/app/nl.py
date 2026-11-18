@@ -177,31 +177,73 @@ class RoomData:
 # ------------------------------------------------------------------ 해석기 (provider)
 
 
-def _call_llama(room: RoomData, text: str) -> str:
+def _messages(room: RoomData, text: str) -> list[dict]:
     user = ("<데이터>\n" + json.dumps(room.context(), ensure_ascii=False)
             + "\n</데이터>\n<문장>\n" + text + "\n</문장>")
+    return [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}]
+
+
+def _post_chat(base_url: str, body: dict, headers: dict | None = None, timeout: float = 60) -> str:
+    """OpenAI 형식 /chat/completions에 보내고 답 글자를 받는다. llama.cpp와 OpenAI가 같은 형식이다."""
+    req = urllib.request.Request(
+        base_url.rstrip("/") + "/chat/completions",
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json", **(headers or {})},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return data["choices"][0]["message"]["content"]
+    except (urllib.error.URLError, TimeoutError, OSError, KeyError, IndexError, ValueError) as exc:
+        reason = type(exc).__name__
+        if isinstance(exc, urllib.error.HTTPError):
+            reason = f"HTTP {exc.code}"
+        raise AppError(503, "NL_UNAVAILABLE",
+                       "문장 해석기에 연결하지 못했습니다. 잠시 뒤 다시 시도하거나 체크 표에서 직접 바꿔 주세요.",
+                       {"reason": reason}) from exc
+
+
+def _call_llama(room: RoomData, text: str) -> str:
     body = {
-        "messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}],
+        "messages": _messages(room, text),
         "temperature": 0,
         "max_tokens": 400,
         "response_format": {"type": "json_schema",
                             "json_schema": {"name": "allocation_rules", "strict": True, "schema": SCHEMA}},
         "chat_template_kwargs": {"enable_thinking": False},
     }
-    req = urllib.request.Request(
-        settings.nl_base_url.rstrip("/") + "/chat/completions",
-        data=json.dumps(body).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=settings.nl_timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        return data["choices"][0]["message"]["content"]
-    except (urllib.error.URLError, TimeoutError, OSError, KeyError, IndexError, ValueError) as exc:
-        raise AppError(503, "NL_UNAVAILABLE",
-                       "문장 해석기에 연결하지 못했습니다. 잠시 뒤 다시 시도하거나 체크 표에서 직접 바꿔 주세요.",
-                       {"reason": type(exc).__name__}) from exc
+    return _post_chat(settings.nl_base_url, body, timeout=settings.nl_timeout)
+
+
+def _strict(schema: Any) -> Any:
+    """OpenAI strict 모드에 맞춘 schema: 모든 칸을 required로, 지원하지 않는 minItems는 뺀다 (뜻은 같고 서버 검사가 다시 본다)."""
+    if isinstance(schema, list):
+        return [_strict(x) for x in schema]
+    if not isinstance(schema, dict):
+        return schema
+    out = {k: _strict(v) for k, v in schema.items() if k != "minItems"}
+    if "properties" in out:
+        out["required"] = list(out["properties"])
+    return out
+
+
+def _call_fallback(room: RoomData, text: str) -> str:
+    """큰 모델(OpenAI)에 같은 프롬프트 · 같은 출력 모양으로 다시 묻는다."""
+    body = {
+        "model": settings.nl_fallback_model,
+        "messages": _messages(room, text),
+        "temperature": 0,
+        "max_completion_tokens": 400,
+        "response_format": {"type": "json_schema",
+                            "json_schema": {"name": "allocation_rules", "strict": True, "schema": _strict(SCHEMA)}},
+    }
+    return _post_chat(settings.nl_fallback_base_url, body,
+                      headers={"Authorization": f"Bearer {settings.nl_fallback_api_key}"}, timeout=30)
+
+
+def fallback_enabled() -> bool:
+    return bool(settings.nl_fallback_api_key)
 
 
 def _call_stub(room: RoomData, text: str) -> str:
@@ -229,6 +271,11 @@ def _call_stub(room: RoomData, text: str) -> str:
         return json.dumps({"status": "NEEDS_CLARIFICATION", "proposals": [], "clarification": None})
     proposals = [{"receipt_item_id": it.id, "type": rule[0], "params": rule[1], "evidence": text} for it in what]
     return json.dumps({"status": "PARSED", "proposals": proposals, "clarification": None}, ensure_ascii=False)
+
+
+def call_fallback(room: RoomData, text: str) -> str:
+    """큰 모델을 부른다. 테스트에서는 이 함수를 바꿔 끼운다."""
+    return _call_fallback(room, text)
 
 
 def call_model(room: RoomData, text: str) -> str:
@@ -471,13 +518,29 @@ def interpret(room: RoomData, text: str, previous: str | None = None) -> dict[st
     """previous가 있으면 앞 문장(되물은 질문 전에 한 말)에 이어서 답한 것으로 보고 합쳐서 해석한다."""
     full = f"{previous.strip()} {text.strip()}" if previous and previous.strip() else text.strip()
     start = time.perf_counter()
-    raw = call_model(room, full)
-    log.info("문장 해석 provider=%s text=%r raw=%s", settings.nl_provider, full, raw)
+    provider = settings.nl_provider
+    try:
+        raw = call_model(room, full)
+        checked = validate(raw, full, room)
+    except AppError:
+        if not fallback_enabled():
+            raise
+        raw, checked = "(작은 모델에 연결하지 못함)", _clarify()
+    log.info("문장 해석 provider=%s text=%r raw=%s", provider, full, raw)
+    # 작은 모델 답이 서버 검사에서 걸렸으면(빠진 것을 묻는 진짜 질문이 아닌 다시 묻기) 큰 모델에 한 번 더 묻는다
+    if fallback_enabled() and checked.status == "NEEDS_CLARIFICATION" and not checked.follow_up:
+        small = checked
+        raw2 = call_fallback(room, full)
+        log.info("문장 해석 provider=openai(%s) text=%r raw=%s", settings.nl_fallback_model, full, raw2)
+        checked = validate(raw2, full, room)
+        checked.repairs = [*small.repairs, "큰 모델로 넘김", *checked.repairs]
+        checked.model_rules = small.model_rules  # 규칙 표는 기본 모델이 고른 것 × 최종 (넘겨서 고친 것이 보이게)
+        raw = f"{raw}\n--- {settings.nl_fallback_model} ---\n{raw2}"
+        provider = f"{provider}→openai"
     elapsed_ms = int((time.perf_counter() - start) * 1000)
-    checked = validate(raw, full, room)
     status, message, changes = to_changes(checked, room)
     trace = {"raw": raw, "model_rules": checked.model_rules, "repairs": checked.repairs,
              "final_rules": [p["type"] for p in checked.proposals] if checked.status == "PARSED" else [checked.status]}
     return {"status": status, "message": message, "changes": changes, "text": full,
             "follow_up": status == "NEEDS_CLARIFICATION" and checked.follow_up,
-            "provider": settings.nl_provider, "elapsed_ms": elapsed_ms, "trace": trace}
+            "provider": provider, "elapsed_ms": elapsed_ms, "trace": trace}

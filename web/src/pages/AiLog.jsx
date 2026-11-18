@@ -1,5 +1,5 @@
 import { useParams } from 'react-router'
-import { api } from '../api.js'
+import { api, providerLabel } from '../api.js'
 import { useLoad } from '../hooks.js'
 import { BackLink, Loading, Page } from '../ui.jsx'
 
@@ -32,6 +32,7 @@ export default function AiLog() {
         <div className="glass card-pad"><span className="muted-13">말한 횟수</span><b>{s.total}</b></div>
         <div className="glass card-pad"><span className="muted-13">반영 비율</span><b>{pct(s.apply_rate)}</b><span className="muted-13">{s.applied}/{s.proposals}</span></div>
         <div className="glass card-pad"><span className="muted-13">반영 뒤 손으로 고침</span><b>{pct(s.fix_rate)}</b><span className="muted-13">{s.fixed_after_apply}/{s.applied}</span></div>
+        <div className="glass card-pad"><span className="muted-13">GPT로 넘김</span><b>{s.escalated}</b><span className="muted-13">작은 모델이 못 알아들은 말</span></div>
         <div className="glass card-pad"><span className="muted-13">서버가 고친 답</span><b>{s.repaired_entries}</b><span className="muted-13">{Object.entries(s.repairs).map(([k, v]) => `${k.replace('EXCLUDE', '빼기').replace('EQUAL', '끼리만')} ${v}`).join(', ') || '없음'}</span></div>
       </section>
 
@@ -66,7 +67,7 @@ export default function AiLog() {
                 {e.model_rules.map(label).join(', ')}
                 {e.repairs.length > 0 && <> → <b style={{ color: 'var(--text)' }}>{e.final_rules.map(label).join(', ')}</b> (서버 보정)</>}
                 {' · '}{e.status === 'PARSED' && e.changes.length === 0 ? '바꿀 것 없음' : OUTCOME[e.outcome ?? '결과 없음']}
-                {e.provider !== 'stub' && ` · ${(e.elapsed_ms / 1000).toFixed(1)}초`}
+                {e.provider !== 'stub' && ` · ${providerLabel(e.provider)} ${(e.elapsed_ms / 1000).toFixed(1)}초`}
               </span>
               {e.manual_fixes.length > 0 && (
                 <span className="ailog-fix">반영 뒤 손으로 고침: {e.manual_fixes.map((f) => `${f.name} (AI ${names(f.ai_member_ids)}명 → ${names(f.user_member_ids)}명)`).join(', ')}</span>

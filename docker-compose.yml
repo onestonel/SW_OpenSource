@@ -43,6 +43,8 @@ services:
       RECEIPT_STORAGE_PATH: /data/receipts
       NL_PROVIDER: ${NL_PROVIDER:-stub}
       NL_BASE_URL: http://llm:8080/v1
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-} # 있으면 작은 모델이 못 알아들을 때만 GPT에 다시 묻는다 (.env에만, 커밋 금지)
+      NL_FALLBACK_MODEL: ${NL_FALLBACK_MODEL:-gpt-4.1-mini}
       TZ: Asia/Seoul
       WATCHFILES_FORCE_POLLING: "true" # Windows에서 파일을 고쳐도 자동 재시작되게
     ports:

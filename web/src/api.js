@@ -91,3 +91,6 @@ export const photoSrc = (url) => (url?.startsWith('/') ? new URL(url, API_BASE_U
 
 // 금액은 정수 원으로 주고받고, 천 단위 콤마는 화면에서만 붙인다
 export const won = (n) => n.toLocaleString('ko-KR')
+
+// 어떤 모델이 해석했는지. '→openai'는 작은 모델이 못 알아들어 GPT에 다시 물은 경우
+export const providerLabel = (p) => ({ stub: '모델 없이 흉내(stub)', llama: 'EXAONE', 'llama→openai': 'EXAONE → GPT로 넘김', 'stub→openai': 'stub → GPT로 넘김' }[p] ?? p)

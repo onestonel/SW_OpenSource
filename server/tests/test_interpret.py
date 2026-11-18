@@ -520,3 +520,92 @@ def test_follow_up_only_for_real_questions(api, room, receipt, monkeypatch):
     assert ask(api, room, "수아는 소주 안 마셨어").json()["follow_up"] is False  # 다시 말해 주세요
     model_says(monkeypatch, {"status": "NEEDS_CLARIFICATION", "proposals": [], "clarification": None})
     assert ask(api, room, "수아는 아침 안 먹었어").json()["follow_up"] is True  # 메뉴를 묻는 진짜 질문
+
+
+# ------------------------------------------------------------------ 큰 모델로 넘기기 (작은 모델이 못 알아들을 때만)
+
+
+@pytest.fixture
+def with_key(monkeypatch):
+    monkeypatch.setattr(nl, "settings", nl.settings.__class__(nl_provider="llama", nl_fallback_api_key="sk-test"))
+
+
+def big_says(monkeypatch, answer, seen=None):
+    raw = answer if isinstance(answer, str) else json.dumps(answer, ensure_ascii=False)
+
+    def call(room_, text):
+        if seen is not None:
+            seen.append(text)
+        return raw
+    monkeypatch.setattr(nl, "call_fallback", call)
+
+
+def test_escalates_when_small_model_fails_check(api, db, room, receipt, monkeypatch, with_key):
+    a, b, c, d = ids(room)
+    soju = item_id(receipt, "소주")
+    model_says(monkeypatch, "JSON 아님")  # 작은 모델 실패 → 다시 묻기
+    seen = []
+    big_says(monkeypatch, parsed({"receipt_item_id": soju, "type": "EXCLUDE", "params": {"member_ids": [d]}}), seen)
+    got = ask(api, room, "수아는 소주 안 마셨어").json()
+    assert seen == ["수아는 소주 안 마셨어"]
+    assert got["provider"] == "llama→openai" and got["changes"][0]["after_member_ids"] == [a, b, c]
+    [entry] = logs(db)
+    assert "큰 모델로 넘김" in entry.repairs and entry.provider == "llama→openai"
+    assert "--- gpt-4.1-mini ---" in entry.raw
+    s = api.get(f"/rooms/{room['room_token']}/checks/ai-log").json()["summary"]
+    assert s["escalated"] == 1 and s["by_provider"] == {"llama→openai": 1}
+
+
+def test_no_escalation_for_real_question_or_success(api, room, receipt, monkeypatch, with_key):
+    seen = []
+    big_says(monkeypatch, "{}", seen)
+    model_says(monkeypatch, {"status": "NEEDS_CLARIFICATION", "proposals": [], "clarification": None})
+    assert ask(api, room, "수아는 아침 안 먹었어").json()["follow_up"] is True  # 메뉴를 묻는 진짜 질문
+    model_says(monkeypatch, parsed({"receipt_item_id": item_id(receipt, "소주"), "type": "EXCLUDE",
+                                    "params": {"member_ids": [ids(room)[3]]}}))
+    assert ask(api, room, "수아는 소주 안 마셨어").json()["provider"] == "llama"
+    assert seen == []
+
+
+def test_no_escalation_without_key(api, room, receipt, monkeypatch):
+    seen = []
+    big_says(monkeypatch, "{}", seen)
+    model_says(monkeypatch, "JSON 아님")
+    assert ask(api, room, "수아는 소주 안 마셨어").json()["status"] == "NEEDS_CLARIFICATION"
+    assert seen == []
+
+
+def test_escalates_when_small_model_is_down(api, room, receipt, monkeypatch, with_key):
+    def down(room_, text):
+        raise nl.AppError(503, "NL_UNAVAILABLE", "x")
+    monkeypatch.setattr(nl, "call_model", down)
+    big_says(monkeypatch, parsed({"receipt_item_id": item_id(receipt, "소주"), "type": "EXCLUDE",
+                                  "params": {"member_ids": [ids(room)[3]]}}))
+    got = ask(api, room, "수아는 소주 안 마셨어").json()
+    assert got["status"] == "PARSED" and got["provider"] == "llama→openai"
+
+
+def test_big_model_down_is_503(api, room, receipt, monkeypatch, with_key):
+    model_says(monkeypatch, "JSON 아님")
+
+    def down(room_, text):
+        raise nl.AppError(503, "NL_UNAVAILABLE", "x")
+    monkeypatch.setattr(nl, "call_fallback", down)
+    assert error(ask(api, room, "수아는 소주 안 마셨어", expect=503))["code"] == "NL_UNAVAILABLE"
+
+
+def test_openai_schema_is_strict_compatible():
+    s = nl._strict(nl.SCHEMA)
+    dumped = json.dumps(s)
+    assert "minItems" not in dumped
+
+    def check(x):
+        if isinstance(x, dict):
+            if "properties" in x:
+                assert sorted(x["required"]) == sorted(x["properties"]) and x.get("additionalProperties") is False
+            for v in x.values():
+                check(v)
+        elif isinstance(x, list):
+            for v in x:
+                check(v)
+    check(s)

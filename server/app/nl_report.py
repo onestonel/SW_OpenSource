@@ -46,6 +46,8 @@ def summarize(entries: list[NlLog]) -> dict[str, Any]:
         "fix_rate": _rate(len(fixed), len(applied)),
         "repairs": dict(Counter(r for e in entries for r in e.repairs)),
         "repaired_entries": sum(1 for e in entries if e.repairs),
+        "by_provider": dict(Counter(e.provider for e in entries)),
+        "escalated": sum(1 for e in entries if "큰 모델로 넘김" in e.repairs),
         "rule_matrix": {"rows": rows, "cols": cols, "cells": [[pairs[(r, c)] for c in cols] for r in rows]},
         "elapsed_ms": {"avg": round(sum(times) / len(times)) if times else None, "max": max(times, default=None)},
     }
