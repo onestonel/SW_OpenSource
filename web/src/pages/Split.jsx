@@ -210,6 +210,7 @@ function SayBox({ token, members, chat, setChat, onApplied }) {
       </div>
       {busy && <p className="muted-13">AI가 읽고 있어요. 5~10초 걸려요.</p>}
       <ErrorText error={error} />
+      <Link to={`/rooms/${token}/ai-log`} className="muted-13" style={{ alignSelf: 'flex-end' }}>AI 총무 기록 보기 →</Link>
     </form>
   )
 }
