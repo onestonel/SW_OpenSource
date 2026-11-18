@@ -136,8 +136,8 @@ def test_weighted_and_quantity_are_unsupported_in_v1(api, room, receipt, monkeyp
 @pytest.mark.parametrize("answer, text", [
     ("이건 JSON이 아님", "수아는 소주 안 마셨어"),
     ({"status": "PARSED", "proposals": [], "clarification": None}, "수아는 소주 안 마셨어"),
-    # 없는 품목 id
-    (parsed({"receipt_item_id": 999999, "type": "EXCLUDE", "params": {"member_ids": [1]}}), "수아는 소주 안 마셨어"),
+    # 없는 품목 id, 문장에도 품목 이름이 없음 (고칠 근거가 없음)
+    (parsed({"receipt_item_id": 999999, "type": "EXCLUDE", "params": {"member_ids": [1]}}), "수아는 안 마셨어"),
 ])
 def test_bad_model_answer_asks_again(api, room, receipt, monkeypatch, answer, text):
     model_says(monkeypatch, answer)
