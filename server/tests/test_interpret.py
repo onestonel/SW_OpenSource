@@ -146,14 +146,13 @@ def test_bad_model_answer_asks_again(api, room, receipt, monkeypatch, answer, te
     assert got["message"]
 
 
-def test_member_not_in_sentence_asks_again(api, room, receipt, monkeypatch):
-    """모델이 문장에 없는 사람을 지어내면 다시 묻는다."""
+def test_member_not_in_sentence_is_replaced_by_named_member(api, room, receipt, monkeypatch):
+    """모델이 문장에 없는 사람(지영)을 고르면, 문장에 나온 사람(수아)으로 고친다."""
     a, b, c, d = ids(room)
     model_says(monkeypatch, parsed({"receipt_item_id": item_id(receipt, "소주"), "type": "EXCLUDE",
                                     "params": {"member_ids": [b]}}))
     got = ask(api, room, "수아는 소주 안 마셨어").json()
-    assert got["status"] == "NEEDS_CLARIFICATION"
-    assert "사람" in got["message"]
+    assert got["changes"][0]["after_member_ids"] == [a, b, c]
 
 
 def test_item_not_in_sentence_is_replaced_by_named_item(api, room, receipt, monkeypatch):
