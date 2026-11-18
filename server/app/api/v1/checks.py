@@ -11,9 +11,10 @@ from fastapi import APIRouter
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from ... import nl
 from ...core.errors import AppError, validation_error
 from ...models import Receipt, ReceiptItem, ReceiptItemPayer, Room
-from ...schemas import CheckItemOut, CheckMemberOut, ChecksIn, ChecksOut
+from ...schemas import CheckItemOut, CheckMemberOut, ChecksIn, ChecksOut, InterpretIn, InterpretOut
 from ...settlement_store import mark_stale
 from ..deps import DB, CurrentRoom
 
@@ -82,3 +83,25 @@ def save_checks(body: ChecksIn, room: CurrentRoom, db: DB) -> ChecksOut:
     db.commit()
     db.expire_all()
     return _checks_out(db, room)
+
+
+@router.post("/interpret", response_model=InterpretOut, summary="문장으로 체크 표 바꾸기 — 변경안 받기 (저장하지 않음)")
+def interpret_checks(body: InterpretIn, room: CurrentRoom, db: DB) -> InterpretOut:
+    """
+    "D는 술 안 마셨어" 같은 문장을 해석해서 체크 표 변경안을 돌려준다. **저장하지 않는다.**
+    화면은 변경안을 보여 주고, 사용자가 적용을 누르면 `PUT /checks`로 `after_member_ids`를 보낸다.
+
+    - V1에서 바꿀 수 있는 것: `~끼리만`(EQUAL) · `~ 빼고`(EXCLUDE) · `~가 다 낼게`(FULL)
+    - 비율 · 수량 문장, 정산과 관계없는 문장 → `UNSUPPORTED`
+    - 사람 · 품목을 정할 수 없거나, 모델이 문장에 없는 사람 · 품목을 만들면 → `NEEDS_CLARIFICATION`
+    - 확정된 영수증이 없으면 `409 NO_CHECK_ITEMS`, 해석기에 연결하지 못하면 `503 NL_UNAVAILABLE`
+    """
+    checks = _checks_out(db, room)
+    if not checks.items:
+        raise AppError(409, "NO_CHECK_ITEMS", "확정된 영수증이 없어서 바꿀 품목이 없습니다. 영수증을 먼저 확정해 주세요.")
+    data = nl.RoomData(
+        members=[(m.id, m.name) for m in checks.members],
+        items=[nl.Item(id=i.item_id, name=i.name, amount=i.amount, receipt_id=i.receipt_id,
+                       store_name=i.store_name, member_ids=list(i.member_ids)) for i in checks.items],
+    )
+    return InterpretOut(**nl.interpret(data, body.text))

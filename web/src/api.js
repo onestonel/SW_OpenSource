@@ -10,7 +10,7 @@ export const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? 'http://localh
 // shortcut: 서버 API가 생기기 전까지 기본은 목(mock) 데이터. 서버가 준비되면 VITE_USE_MOCK=false로 켜거나 기본값을 바꾼다
 const USE_MOCK = import.meta.env?.VITE_USE_MOCK !== 'false'
 
-async function request(method, path, body) {
+async function request(method, path, body, timeoutMs) {
   if (USE_MOCK) return mockRequest(method, path, body)
 
   const isForm = body instanceof FormData
@@ -21,7 +21,8 @@ async function request(method, path, body) {
       headers: body && !isForm ? { 'Content-Type': 'application/json' } : undefined,
       body: body && !isForm ? JSON.stringify(body) : body,
       // 서버가 답 없이 멈춰도 화면이 계속 기다리지 않게 (사진은 10MB까지라 더 길게)
-      signal: AbortSignal.timeout(isForm ? 60000 : 10000),
+      // 문장 해석(LLM)은 노트북에서 5~10초, 처음 한 번은 더 걸려서 따로 길게 준다
+      signal: AbortSignal.timeout(timeoutMs ?? (isForm ? 60000 : 10000)),
     })
   } catch (e) {
     if (e.name === 'TimeoutError') throw new ApiError(0, 'TIMEOUT', '서버 응답이 너무 늦어요. 잠시 뒤 다시 시도해 주세요.')
@@ -75,6 +76,8 @@ export const api = {
 
   getChecks: (t) => request('GET', `${room(t)}/checks`),
   saveChecks: (t, items) => request('PUT', `${room(t)}/checks`, { items }),
+  // 문장 → 체크 표 변경안 (저장하지 않음. 적용은 체크 표에 반영한 뒤 '저장'으로)
+  interpretChecks: (t, text) => request('POST', `${room(t)}/checks/interpret`, { text }, 90000),
 
   recalculate: (t) => request('POST', `${room(t)}/settlements`),
   getLatestSettlement: (t) => request('GET', `${room(t)}/settlements/latest`),

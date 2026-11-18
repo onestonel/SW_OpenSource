@@ -25,9 +25,18 @@ function Table({ token, checks, receipts }) {
   const groups = [...new Set(items.map((it) => it.receipt_id))].map((rid) => items.filter((it) => it.receipt_id === rid))
   const cols = { gridTemplateColumns: `minmax(72px, 1fr) repeat(${members.length}, 44px)` }
 
+  const [flash, setFlash] = useState([]) // 문장으로 방금 바꾼 품목 (잠깐 강조)
+
   const toggle = (itemId, memberId) => {
     const now = picked[itemId]
     setPicked({ ...picked, [itemId]: now.includes(memberId) ? now.filter((m) => m !== memberId) : [...now, memberId] })
+  }
+
+  // 문장 해석 변경안을 체크 표에 반영한다. 저장은 아래 '저장' 버튼으로 (손으로 체크한 것과 똑같이)
+  const applyChanges = (changes) => {
+    setPicked({ ...picked, ...Object.fromEntries(changes.map((c) => [c.item_id, c.after_member_ids])) })
+    setFlash(changes.map((c) => c.item_id))
+    setTimeout(() => setFlash([]), 2500)
   }
 
   async function save() {
@@ -62,6 +71,8 @@ function Table({ token, checks, receipts }) {
         </div>
       )}
 
+      {groups.length > 0 && <SayBox token={token} members={members} onApply={applyChanges} />}
+
       {groups.map((rows) => (
         <div key={rows[0].receipt_id} className="glass check-card">
           <div className="check-grid check-grid--head" style={cols}>
@@ -74,7 +85,7 @@ function Table({ token, checks, receipts }) {
             const ids = picked[it.item_id]
             const empty = ids.length === 0
             return (
-              <div key={it.item_id} className="check-grid check-grid--row" style={cols}>
+              <div key={it.item_id} className={`check-grid check-grid--row${flash.includes(it.item_id) ? ' check-grid--flash' : ''}`} style={cols}>
                 <div className="stack-4" style={{ gap: 1, minWidth: 0 }}>
                   <span style={{ fontSize: 15 }}>{it.name}</span>
                   {empty
@@ -109,5 +120,70 @@ function Table({ token, checks, receipts }) {
         </>
       )}
     </Page>
+  )
+}
+
+const RULE_LABEL = { EXCLUDE: '빼기', FULL: '한 명이 다 내기', EQUAL: '~끼리만' }
+
+// 말로 바꾸기: "수아는 소주 안 마셨어" → 서버(LLM)가 변경안을 주면 보여 주고, 적용하면 체크 표에 반영
+function SayBox({ token, members, onApply }) {
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState(null)
+  const nameOf = Object.fromEntries(members.map((m) => [m.id, m.name]))
+  const names = (ids) => ids.map((id) => nameOf[id]).join(' · ')
+
+  async function ask(e) {
+    e.preventDefault()
+    if (!text.trim() || busy) return
+    setBusy(true)
+    setError(null)
+    setResult(null)
+    try {
+      setResult(await api.interpretChecks(token, text.trim()))
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function apply() {
+    onApply(result.changes)
+    setResult(null)
+    setText('')
+  }
+
+  return (
+    <form className="glass card-pad stack-10" onSubmit={ask}>
+      <label htmlFor="say" className="field-label">말로 바꾸기</label>
+      <div className="say-row">
+        <input id="say" className="input" type="text" maxLength={200} placeholder='예: 수아는 소주 안 마셨어'
+          value={text} onChange={(e) => setText(e.target.value)} disabled={busy} />
+        <button type="submit" className="btn-secondary say-btn" disabled={busy || !text.trim()}>{busy ? '읽는 중…' : '해석'}</button>
+      </div>
+      {busy && <p className="muted-13">AI가 문장을 읽고 있어요. 5~10초 걸려요.</p>}
+      <ErrorText error={error} />
+      {result && (
+        <div className="stack-10">
+          <p className="muted-14" style={{ color: 'var(--text)' }}>{result.message}</p>
+          {result.changes.map((c) => (
+            <div key={c.item_id} className="say-change">
+              <span className="strong">{c.name}</span>
+              <span className="muted-13">{c.store_name} · {RULE_LABEL[c.rule]}</span>
+              <span className="muted-13"><s>{names(c.before_member_ids)}</s> → <b style={{ color: 'var(--text)' }}>{names(c.after_member_ids)}</b></span>
+            </div>
+          ))}
+          {result.changes.length > 0 && (
+            <div className="say-row">
+              <button type="button" className="btn-primary" onClick={apply}>체크 표에 반영</button>
+              <button type="button" className="btn-secondary say-btn" onClick={() => setResult(null)}>취소</button>
+            </div>
+          )}
+          <p className="muted-13">{result.provider !== 'stub' ? `EXAONE · ${(result.elapsed_ms / 1000).toFixed(1)}초` : '모델 없이 흉내(stub)'}</p>
+        </div>
+      )}
+    </form>
   )
 }

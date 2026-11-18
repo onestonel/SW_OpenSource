@@ -51,6 +51,28 @@ function checksOut(r) {
   }
 }
 
+// 문장 해석 흉내 (서버 NL_PROVIDER=stub과 같은 규칙). 실제 해석은 서버의 llama.cpp가 한다
+function interpretStub(r, text) {
+  const { members, items } = checksOut(r)
+  if (!items.length) fail(409, 'NO_CHECK_ITEMS', '확정된 영수증이 없어서 바꿀 품목이 없습니다. 영수증을 먼저 확정해 주세요.')
+  const who = members.filter((m) => text.includes(m.name)).map((m) => m.id)
+  const what = items.filter((it) => text.includes(it.name))
+  const ask = { status: 'NEEDS_CLARIFICATION', message: '어떤 품목을 누가 내는지 알려 주세요.', changes: [], provider: 'stub', elapsed_ms: 0 }
+  if (!who.length || what.length !== 1) return ask
+  const it = what[0]
+  const has = (...keys) => keys.some((k) => text.includes(k))
+  let rule, after
+  if (has('전부', '다 낼', '다 내') && who.length === 1) [rule, after] = ['FULL', who]
+  else if (has('빼고', '안 먹', '안 마')) [rule, after] = ['EXCLUDE', it.member_ids.filter((m) => !who.includes(m))]
+  else if (has('만', '끼리')) [rule, after] = ['EQUAL', who]
+  else return ask
+  after = members.map((m) => m.id).filter((id) => after.includes(id))
+  if (!after.length) return { ...ask, message: `'${it.name}'을(를) 낼 사람이 아무도 남지 않아요. 누가 내는지 알려 주세요.` }
+  const change = { item_id: it.item_id, receipt_id: it.receipt_id, store_name: it.store_name, name: it.name, rule, evidence: text,
+    before_member_ids: it.member_ids, after_member_ids: after }
+  return { status: 'PARSED', message: '체크 표를 이렇게 바꿀까요?', changes: [change], provider: 'stub', elapsed_ms: 0 }
+}
+
 // 서버 검사 5개 (api-v1.md 3장)
 function validateReceipt(r, body) {
   if (!r.members.some((m) => m.id === body.payer_member_id)) invalid('결제자를 골라주세요.')
@@ -187,6 +209,7 @@ const routes = [
     r.stale = true
     return checksOut(r)
   }],
+  ['POST', /^\/rooms\/([^/]+)\/checks\/interpret$/, (_db, [r], body) => interpretStub(r, body.text ?? '')],
   ['POST', /^\/rooms\/([^/]+)\/settlements$/, (_db, [r]) => settle(r)],
   ['GET', /^\/rooms\/([^/]+)\/settlements\/latest$/, (_db, [r]) => {
     const s = r.settlements.at(-1)

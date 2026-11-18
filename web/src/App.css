@@ -356,3 +356,11 @@
 .transfer-list li { display: flex; justify-content: space-between; gap: 12px; padding: 13px 0; font-size: 16px; font-weight: 700; }
 .transfer-list li + li { border-top: 1px solid rgba(28, 28, 30, 0.05); }
 .copy-toast { padding: 12px 14px; border-radius: 14px; background: rgba(28, 28, 30, 0.82); color: #fff; font-size: 13px; line-height: 1.6; white-space: pre-line; }
+
+/* 말로 바꾸기 (문장 → 체크 표 변경안) */
+.say-row { display: flex; gap: 8px; align-items: stretch; }
+.say-row .input { flex: 1; min-width: 0; }
+.say-btn { flex: 0 0 auto; width: auto; padding-left: 16px; padding-right: 16px; }
+.say-change { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: rgba(28, 28, 30, 0.04); }
+.check-grid--flash { animation: check-flash 2.5s ease-out; }
+@keyframes check-flash { from { background: rgba(255, 196, 0, 0.35); } to { background: transparent; } }

@@ -175,6 +175,29 @@ class ChecksIn(In):
     items: list[CheckItemIn] = Field(description="바뀐 품목만 보내도 된다. 보내지 않은 품목의 체크는 그대로")
 
 
+class InterpretIn(In):
+    text: str = Field(min_length=1, max_length=200, description="분담 조건 문장. 예: \"D는 술 안 마셨어\"")
+
+
+class InterpretChangeOut(Out):
+    item_id: int
+    receipt_id: int
+    store_name: str
+    name: str
+    rule: Literal["EQUAL", "EXCLUDE", "FULL"] = Field(description="EQUAL ~끼리만 · EXCLUDE ~빼고 · FULL ~가 다 냄")
+    evidence: str | None = Field(description="해석기가 근거로 든 문장 부분")
+    before_member_ids: list[int] = Field(description="지금 체크된 구성원 (구성원 순서)")
+    after_member_ids: list[int] = Field(description="바꾼 뒤 체크될 구성원. 적용하면 PUT /checks로 이 값을 보낸다")
+
+
+class InterpretOut(Out):
+    status: Literal["PARSED", "NEEDS_CLARIFICATION", "UNSUPPORTED"]
+    message: str = Field(description="사용자에게 그대로 보여 줄 한국어 문장 (다시 묻기 질문 포함)")
+    changes: list[InterpretChangeOut] = Field(description="PARSED일 때만 채워진다. 저장은 하지 않는다")
+    provider: str = Field(description="stub(모델 없이 흉내) 또는 llama(llama.cpp · EXAONE)")
+    elapsed_ms: int = Field(description="해석에 걸린 시간 (밀리초)")
+
+
 # ------------------------------------------------------------------ 정산 결과 (5단계)
 
 class SettlementMemberOut(Out):

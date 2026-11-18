@@ -67,6 +67,7 @@ services:
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3000"
     environment:
       VITE_API_BASE_URL: http://localhost:8000/api/v1
+      VITE_USE_MOCK: ${VITE_USE_MOCK:-false} # 서버 API가 다 들어와서 기본은 진짜 서버. 목 데이터로 보려면 .env에 true
       CHOKIDAR_USEPOLLING: "true" # Windows에서 파일을 고쳐도 화면이 바로 바뀌게
       TZ: Asia/Seoul
     ports:
@@ -87,7 +88,7 @@ services:
     environment:
       LLAMA_CACHE: /models
     ports:
-      - "8080:8080"
+      - "8081:8080" # 내 컴퓨터에서는 8081 (8080은 Airflow 등과 자주 겹침). 서버는 컨테이너 안에서 llm:8080으로 부른다
     volumes:
       - llm_models:/models
 

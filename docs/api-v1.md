@@ -281,6 +281,39 @@
 - 받는 것 `200`: 체크 표 전체 (위 「받기」와 같은 모양)
 - 최신 정산을 '최신 아님'으로 만듭니다
 
+### 말로 바꾸기 — 변경안 받기 `POST /rooms/{room_token}/checks/interpret` (V3 미리 연결)
+
+"수아는 소주 안 마셨어" 같은 문장을 해석해서 **체크 표 변경안**을 돌려줍니다. **저장하지 않습니다.**
+화면은 변경안을 보여 주고, 사용자가 반영하면 체크 표에 표시한 뒤 「저장」(`PUT /checks`)으로 저장합니다.
+
+보내는 것:
+```json
+{ "text": "수아는 소주 안 마셨어" }
+```
+- `text`는 1~200자
+
+받는 것 `200`:
+```json
+{
+  "status": "PARSED",
+  "message": "체크 표를 이렇게 바꿀까요?",
+  "changes": [
+    { "item_id": 2, "receipt_id": 1, "store_name": "1차 고깃집", "name": "소주", "rule": "EXCLUDE",
+      "evidence": "수아는 소주 안 마셨어", "before_member_ids": [1, 2, 3, 4], "after_member_ids": [1, 2, 3] }
+  ],
+  "provider": "llama",
+  "elapsed_ms": 6300
+}
+```
+- `status`
+  - `PARSED`: `changes`에 변경안. 이미 그렇게 되어 있으면 `changes`가 비고 `message`가 그 내용을 알려 줍니다
+  - `NEEDS_CLARIFICATION`: 사람 · 품목을 정할 수 없거나, 모델이 문장에 없는 사람 · 품목을 만들었을 때. `message`가 다시 묻는 질문입니다
+  - `UNSUPPORTED`: 정산과 관계없는 문장, 또는 비율 · 수량으로 나누기 (V1 정산은 "체크한 사람끼리 똑같이"만 계산하므로)
+- `rule`: `EXCLUDE` ~빼고 · `FULL` ~가 다 낼게 · `EQUAL` ~끼리만. `EXCLUDE`는 지금 체크된 사람에서 뺍니다
+- `provider`: `stub`(모델 없이 간단한 규칙으로 흉내) 또는 `llama`(llama.cpp · EXAONE 3.5 2.4B). `.env`의 `NL_PROVIDER`로 고릅니다
+- 확정된 영수증이 없으면 `409 NO_CHECK_ITEMS`, 해석기(llm 컨테이너)에 연결하지 못하면 `503 NL_UNAVAILABLE`
+- 프롬프트 · 출력 JSON schema · 서버 검사는 `llm/bench.py`(PR #13)와 같습니다
+
 ---
 
 ## 5. 정산 결과 (5단계)
