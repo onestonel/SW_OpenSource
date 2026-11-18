@@ -90,7 +90,7 @@ def check(token: str, ids: dict[str, int]) -> bool:
             call("POST", f"/rooms/{token}/checks/apply", {"changes": [
                 {"item_id": c["item_id"], "member_ids": c["after_member_ids"],
                  **({"amount": c["after_amount"]} if c["after_amount"] != c["before_amount"] else {})}
-                for c in r["changes"]]})
+                for c in r["changes"]], "interpretation_id": r["interpretation_id"]})
     s = call("POST", f"/rooms/{token}/settlements")
     got = [(t["from"]["name"], t["to"]["name"], t["amount"]) for t in s["transfers"]]
     good = got == EXPECTED_TRANSFERS
@@ -110,6 +110,7 @@ def main() -> None:
     if "--check" in sys.argv:
         ok = check(token, ids)
         print("\n모두 통과했습니다." if ok else "\n실패한 문장이 있습니다. 위 결과를 보내 주세요.")
+        print("AI 총무 기록 집계: docker compose exec server python scripts/nl_report.py --list")
         sys.exit(0 if ok else 1)
 
 

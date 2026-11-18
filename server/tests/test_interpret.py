@@ -443,3 +443,37 @@ def test_saving_same_checks_is_not_a_fix(api, db, room, receipt, monkeypatch):
              expect=200)
     api.put(f"/rooms/{room['room_token']}/checks", {"items": [{"item_id": soju, "member_ids": [c, b, a]}]})
     assert logs(db)[0].manual_fixes == []
+
+
+def test_ai_log_summary(api, db, room, receipt, monkeypatch):
+    a, b, c, d = ids(room)
+    meat, soju = item_id(receipt, "삼겹살"), item_id(receipt, "소주")
+    model_says(monkeypatch, parsed({"receipt_item_id": meat, "type": "EXCLUDE", "params": {"member_ids": [b, c]}}))
+    got = ask(api, room, "삼겹살은 지영이랑 현우만 먹었어").json()
+    api.post(f"/rooms/{room['room_token']}/checks/apply",
+             {"changes": [{"item_id": meat, "member_ids": [b, c]}], "interpretation_id": got["interpretation_id"]},
+             expect=200)
+    model_says(monkeypatch, {"status": "NEEDS_CLARIFICATION", "proposals": [], "clarification": None})
+    ask(api, room, "수아는 안 마셨어")
+    api.put(f"/rooms/{room['room_token']}/checks", {"items": [{"item_id": meat, "member_ids": [b]}]})
+    assert soju
+
+    log = api.get(f"/rooms/{room['room_token']}/checks/ai-log").json()
+    s = log["summary"]
+    assert s["total"] == 2
+    assert s["by_status"] == {"PARSED": 1, "NEEDS_CLARIFICATION": 1}
+    assert (s["proposals"], s["applied"], s["apply_rate"]) == (1, 1, 1.0)
+    assert (s["fixed_after_apply"], s["fix_rate"]) == (1, 1.0)
+    assert s["repairs"] == {"EXCLUDE→EQUAL": 1}
+    m = s["rule_matrix"]
+    assert m["cells"][m["rows"].index("EXCLUDE")][m["cols"].index("EQUAL")] == 1
+    assert [e["text"] for e in log["entries"]] == ["수아는 안 마셨어", "삼겹살은 지영이랑 현우만 먹었어"]
+
+
+def test_report_script_runs(api, room, receipt, monkeypatch, tmp_path):
+    """스크립트가 모델 · 집계와 맞물려 도는지만 본다 (출력 형식은 사람이 읽는 용도)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("nl_report_script", "scripts/nl_report.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.pct(0.5) == "50%" and mod.pct(None) == "-"

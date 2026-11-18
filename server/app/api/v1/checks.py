@@ -11,7 +11,7 @@ from fastapi import APIRouter
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from ... import nl
+from ... import nl, nl_report
 from ...core.errors import AppError, validation_error
 from ...models import NlLog, Receipt, ReceiptItem, ReceiptItemPayer, Room, utcnow
 from ...schemas import ApplyIn, CheckItemOut, CheckMemberOut, ChecksIn, ChecksOut, InterpretIn, InterpretOut
@@ -188,3 +188,16 @@ def apply_changes(body: ApplyIn, room: CurrentRoom, db: DB) -> ChecksOut:
     db.commit()
     db.expire_all()
     return _checks_out(db, room)
+
+
+@router.get("/ai-log", summary="AI 총무 기록 — 이 정산방의 집계와 최근 기록")
+def ai_log(room: CurrentRoom, db: DB) -> dict:
+    """
+    이 정산방에서 AI 총무에게 한 말과 결과를 모아 보여 준다. AI가 어디서 틀리는지 찾기 위한 기록이다.
+
+    - `summary`: 상태별 · 사용자 반응별 개수, 반영 비율, 반영 뒤 손으로 고친 비율, 서버 보정 횟수,
+      규칙 표(모델이 원래 고른 규칙 × 서버가 고친 뒤 규칙), 걸린 시간
+    - `entries`: 최근 기록 50개 (새것부터)
+    """
+    entries = db.scalars(select(NlLog).where(NlLog.room_id == room.id).order_by(NlLog.id.desc())).all()
+    return {"summary": nl_report.summarize(list(entries)), "entries": [nl_report.entry_out(e) for e in entries[:50]]}
