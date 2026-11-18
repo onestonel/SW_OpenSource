@@ -248,12 +248,15 @@ class Checked:
     status: str  # PARSED · NEEDS_CLARIFICATION · UNSUPPORTED
     proposals: list[dict]
     message: str
+    follow_up: bool = False  # 진짜 질문이라 다음 말을 이 문장에 이어서 해석하면 되는지
     model_rules: list[str] = field(default_factory=list)  # 모델이 원래 고른 규칙 종류 (고치기 전)
     repairs: list[str] = field(default_factory=list)  # 서버가 고친 것
 
 
-def _clarify(question: str | None = None) -> Checked:
-    return Checked("NEEDS_CLARIFICATION", [], question or ASK_AGAIN)
+def _clarify(question: str | None = None, follow_up: bool = False) -> Checked:
+    """follow_up=True는 빠진 것(메뉴 · 사람)을 묻는 진짜 질문이라 답을 앞 문장에 이어 붙이면 되는 경우다.
+    "다시 말해 주세요" 같은 안내는 False라서, 사용자가 다음에 하는 말은 새 문장으로 해석한다."""
+    return Checked("NEEDS_CLARIFICATION", [], question or ASK_AGAIN, follow_up=follow_up)
 
 
 WHICH = re.compile(r"(\S+?)(?:은|는|을|를|도)?\s+안\s*(?:먹|마)")
@@ -331,7 +334,8 @@ def validate(raw: str, text: str, room: RoomData) -> Checked:
         question = (result.get("clarification") or {}).get("question")
         # 사람과 "안 먹었어"가 있으면, 답하면 무엇을 할지까지 말하는 질문으로 바꾼다 (모델 질문은 짧고 매번 다르다)
         question = menu_question(text, room) or question
-        c = _clarify(question if isinstance(question, str) and question.strip() else None)
+        real = isinstance(question, str) and bool(question.strip())
+        c = _clarify(question if real else None, follow_up=real)
         c.model_rules = ["NEEDS_CLARIFICATION"]
         return c
 
@@ -358,7 +362,16 @@ def _check_parsed(result: dict, text: str, room: RoomData, repairs: list[str]) -
         keys, _ = PARAMS[rule_type]
         params = {k: v for k, v in params.items() if k in keys}  # 종류에 맞지 않는 칸은 버린다
         if item in merged:
-            return _clarify()  # 같은 품목에 규칙 2개
+            # "현우랑 수아는 숙소비 보냈어, 민수만 보내면 돼"처럼 이미 보냄(PAID)과 그 결과(민수만)를 같이 말하면
+            # 같은 품목에 규칙이 둘 나온다. 이미 보냄이 남은 사람을 이미 정하므로 이미 보냄만 남긴다
+            kinds = {merged[item]["type"], rule_type}
+            if "PAID" in kinds and kinds <= {"PAID", "FULL", "EQUAL"}:
+                if rule_type == "PAID":
+                    merged[item] = {"receipt_item_id": item, "type": rule_type, "params": params,
+                                    "evidence": p.get("evidence") if isinstance(p.get("evidence"), str) else None}
+                repairs.append("규칙 2개 합침")
+                continue
+            return _clarify()  # 같은 품목에 서로 다른 규칙 2개
         merged[item] = {"receipt_item_id": item, "type": rule_type, "params": params,
                         "evidence": p.get("evidence") if isinstance(p.get("evidence"), str) else None}
     if not merged:
@@ -377,8 +390,9 @@ def _check_parsed(result: dict, text: str, room: RoomData, repairs: list[str]) -
         if any(room.names[i] not in text for i in ids):
             return _clarify("문장에 나온 사람을 찾지 못했어요. 구성원 이름을 그대로 써 주세요.")
         if items[item].name not in text:
-            return _clarify(menu_question(text, room)
-                            or "문장에 나온 품목을 찾지 못했어요. 체크 표의 품목 이름을 그대로 써 주세요.")
+            q = menu_question(text, room)
+            return _clarify(q, follow_up=True) if q else _clarify(
+                "문장에 나온 품목을 찾지 못했어요. 체크 표의 품목 이름을 그대로 써 주세요.")
     return Checked("PARSED", list(merged.values()), "")
 
 
@@ -441,6 +455,7 @@ def to_changes(checked: Checked, room: RoomData) -> tuple[str, str, list[dict]]:
             after = [m for m in before if m not in prm["member_ids"]]
         after = sorted(set(after), key=order.__getitem__)
         if not after:
+            checked.follow_up = True
             return "NEEDS_CLARIFICATION", f"'{it.name}'을(를) 낼 사람이 아무도 남지 않아요. 누가 내는지 알려 주세요.", []
         if after == before and extra["after_amount"] == it.amount:
             continue
@@ -464,4 +479,5 @@ def interpret(room: RoomData, text: str, previous: str | None = None) -> dict[st
     trace = {"raw": raw, "model_rules": checked.model_rules, "repairs": checked.repairs,
              "final_rules": [p["type"] for p in checked.proposals] if checked.status == "PARSED" else [checked.status]}
     return {"status": status, "message": message, "changes": changes, "text": full,
+            "follow_up": status == "NEEDS_CLARIFICATION" and checked.follow_up,
             "provider": settings.nl_provider, "elapsed_ms": elapsed_ms, "trace": trace}

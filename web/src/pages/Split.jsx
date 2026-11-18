@@ -135,7 +135,8 @@ function SayBox({ token, members, chat, setChat, onApplied }) {
   const nameOf = Object.fromEntries(members.map((m) => [m.id, m.name]))
   const names = (ids) => ids.map((id) => nameOf[id]).join(', ')
   const last = chat.at(-1)
-  const previous = last?.from === 'ai' && last.result.status === 'NEEDS_CLARIFICATION' ? last.result.text : undefined
+  // AI가 빠진 것을 물었을 때만(follow_up) 다음 말을 앞 문장에 이어 붙인다. '다시 말해 주세요'면 새 문장으로 본다
+  const previous = last?.from === 'ai' && last.result.follow_up ? last.result.text : undefined
 
   async function ask(e) {
     e.preventDefault()

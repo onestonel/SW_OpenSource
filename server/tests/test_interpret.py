@@ -493,3 +493,30 @@ def test_menu_question_says_what_happens_next(api, room, receipt, monkeypatch, m
     got = ask(api, room, "수아는 아침 안 먹었어").json()
     assert got["status"] == "NEEDS_CLARIFICATION"
     assert got["message"] == "아침 메뉴가 무엇인가요? 알려 주시면 수아를 그 메뉴에서 뺄게요."
+
+
+def test_paid_with_restated_result_is_merged(api, room, lodging, monkeypatch):
+    """'현우랑 수아는 숙소비를 보냈어 민수만 보내면 돼' → 모델이 PAID와 EQUAL(민수)을 같이 내도 이미 보냄 하나로."""
+    a, b, c, d = ids(room)
+    item = lodging["items"][0]["id"]
+    model_says(monkeypatch, parsed({"receipt_item_id": item, "type": "PAID", "params": {"member_ids": [c, d]}},
+                                   {"receipt_item_id": item, "type": "EQUAL", "params": {"member_ids": [a]}}))
+    got = ask(api, room, "현우랑 수아는 숙소비를 보냈어 민수만 보내면 돼").json()
+    assert got["status"] == "PARSED"
+    assert [(ch["rule"], ch["after_member_ids"], ch["after_amount"]) for ch in got["changes"]] == [("PAID", [a], 100000)]
+
+
+def test_conflicting_rules_still_ask_again(api, room, receipt, monkeypatch):
+    a, b, c, d = ids(room)
+    soju = item_id(receipt, "소주")
+    model_says(monkeypatch, parsed({"receipt_item_id": soju, "type": "EXCLUDE", "params": {"member_ids": [d]}},
+                                   {"receipt_item_id": soju, "type": "FULL", "params": {"member_id": a}}))
+    got = ask(api, room, "수아는 소주 안 마셨고 민수가 소주 다 낼게").json()
+    assert got["status"] == "NEEDS_CLARIFICATION" and got["follow_up"] is False
+
+
+def test_follow_up_only_for_real_questions(api, room, receipt, monkeypatch):
+    model_says(monkeypatch, "JSON 아님")
+    assert ask(api, room, "수아는 소주 안 마셨어").json()["follow_up"] is False  # 다시 말해 주세요
+    model_says(monkeypatch, {"status": "NEEDS_CLARIFICATION", "proposals": [], "clarification": None})
+    assert ask(api, room, "수아는 아침 안 먹었어").json()["follow_up"] is True  # 메뉴를 묻는 진짜 질문

@@ -199,7 +199,8 @@ class InterpretChangeOut(Out):
 class InterpretOut(Out):
     status: Literal["PARSED", "NEEDS_CLARIFICATION", "UNSUPPORTED"]
     message: str = Field(description="사용자에게 그대로 보여 줄 한국어 문장 (다시 묻기 질문 포함)")
-    text: str = Field(description="해석한 문장 전체 (previous + text). 되물으면 다음 요청의 previous로 보낸다")
+    text: str = Field(description="해석한 문장 전체 (previous + text). follow_up이면 다음 요청의 previous로 보낸다")
+    follow_up: bool = Field(description="빠진 것을 묻는 질문이라, 사용자의 다음 말을 이 문장에 이어서 해석하면 되는지")
     changes: list[InterpretChangeOut] = Field(description="PARSED일 때만 채워진다. 저장은 하지 않는다")
     provider: str = Field(description="stub(모델 없이 흉내) 또는 llama(llama.cpp · EXAONE)")
     elapsed_ms: int = Field(description="해석에 걸린 시간 (밀리초)")
