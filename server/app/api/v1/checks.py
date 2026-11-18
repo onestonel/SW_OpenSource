@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from ... import nl
 from ...core.errors import AppError, validation_error
-from ...models import Receipt, ReceiptItem, ReceiptItemPayer, Room
+from ...models import NlLog, Receipt, ReceiptItem, ReceiptItemPayer, Room, utcnow
 from ...schemas import ApplyIn, CheckItemOut, CheckMemberOut, ChecksIn, ChecksOut, InterpretIn, InterpretOut
 from ...settlement_store import mark_stale
 from ..deps import DB, CurrentRoom
@@ -73,6 +73,22 @@ def _set_payers(item: ReceiptItem, member_ids: list[int]) -> None:
     item.payers += [ReceiptItemPayer(member_id=m) for m in sorted(wanted - have)]
 
 
+def _record_manual_fixes(db, room: Room, lines) -> None:
+    """AI 변경안을 반영한 품목을 사용자가 체크 표에서 다르게 고치면, 그 반영 기록에 남긴다 (AI가 틀렸다는 신호)."""
+    applied = db.scalars(select(NlLog).where(NlLog.room_id == room.id, NlLog.outcome == "APPLIED")
+                         .order_by(NlLog.id.desc())).all()
+    for line in lines:
+        for entry in applied:  # 그 품목을 가장 최근에 바꾼 반영 기록 하나
+            change = next((c for c in entry.changes if c["item_id"] == line.item_id), None)
+            if change is None:
+                continue
+            if sorted(change["after_member_ids"]) != sorted(line.member_ids):
+                entry.manual_fixes = [*entry.manual_fixes, {
+                    "item_id": line.item_id, "name": change["name"], "ai_member_ids": change["after_member_ids"],
+                    "user_member_ids": sorted(line.member_ids), "at": utcnow().isoformat()}]
+            break
+
+
 @router.get("", response_model=ChecksOut, summary="체크 표 받기 (확정된 영수증의 품목만)")
 def get_checks(room: CurrentRoom, db: DB) -> ChecksOut:
     return _checks_out(db, room)
@@ -86,6 +102,7 @@ def save_checks(body: ChecksIn, room: CurrentRoom, db: DB) -> ChecksOut:
     - 저장하면 최신 정산을 '최신 아님'으로 만든다
     """
     items = _check_lines(db, room, body.items)
+    _record_manual_fixes(db, room, body.items)
     for line in body.items:
         _set_payers(items[line.item_id], line.member_ids)
     mark_stale(db, room.id)
@@ -115,7 +132,32 @@ def interpret_checks(body: InterpretIn, room: CurrentRoom, db: DB) -> InterpretO
                        store_name=i.store_name, member_ids=list(i.member_ids), payer_id=payer_of[i.receipt_id])
                for i in checks.items],
     )
-    return InterpretOut(**nl.interpret(data, body.text, body.previous))
+    res = nl.interpret(data, body.text, body.previous)
+    trace = res.pop("trace")
+    answers_id = _record_outcomes_before(db, room, answered=bool(body.previous))
+    entry = NlLog(room_id=room.id, text=res["text"][:600], answers_id=answers_id, provider=res["provider"],
+                  raw=trace["raw"], model_rules=trace["model_rules"], final_rules=trace["final_rules"],
+                  repairs=trace["repairs"], status=res["status"], changes=res["changes"],
+                  elapsed_ms=res["elapsed_ms"], manual_fixes=[])
+    db.add(entry)
+    db.commit()
+    return InterpretOut(**res, interpretation_id=entry.id)
+
+
+def _record_outcomes_before(db, room: Room, answered: bool) -> int | None:
+    """새로 말하기 전에, 앞에서 결과가 정해지지 않은 기록의 사용자 반응을 남긴다.
+
+    되물음에 답하는 말이면 가장 최근 되물음을 ANSWERED로, 아니면 반영하지 않고 넘어간 변경안을 MOVED_ON으로 둔다.
+    """
+    pending = db.scalars(select(NlLog).where(NlLog.room_id == room.id, NlLog.outcome.is_(None))
+                         .order_by(NlLog.id.desc())).all()
+    answers_id = None
+    for entry in pending:
+        if answered and answers_id is None and entry.status == "NEEDS_CLARIFICATION":
+            entry.outcome, entry.outcome_at, answers_id = "ANSWERED", utcnow(), entry.id
+        elif entry.status == "PARSED" and entry.changes:
+            entry.outcome, entry.outcome_at = "MOVED_ON", utcnow()
+    return answers_id
 
 
 @router.post("/apply", response_model=ChecksOut, summary="말로 바꾸기 변경안 적용 (체크 + 금액 저장)")
@@ -132,6 +174,10 @@ def apply_changes(body: ApplyIn, room: CurrentRoom, db: DB) -> ChecksOut:
         if c.amount is not None and c.amount > items[c.item_id].amount:
             raise validation_error(f"changes.{n}.amount", "품목 금액보다 클 수 없습니다",
                                    "이미 보낸 돈을 뺀 금액은 지금 금액보다 클 수 없습니다.")
+    if body.interpretation_id is not None:
+        entry = db.get(NlLog, body.interpretation_id)
+        if entry is not None and entry.room_id == room.id:
+            entry.outcome, entry.outcome_at = "APPLIED", utcnow()
     for c in body.changes:
         item = items[c.item_id]
         if c.amount is not None and c.amount != item.amount:

@@ -17,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     false,
 )
@@ -169,4 +170,32 @@ class Settlement(Base):
     rounding: Mapped[str] = mapped_column(String(8))
     result: Mapped[dict] = mapped_column(JSON)
     is_stale: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    created_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
+
+
+class NlLog(Base):
+    """AI 총무에게 한 말 하나와 그 결과. AI가 어디서 틀리는지 데이터로 찾기 위한 기록이다.
+
+    - model_rules: 모델이 원래 고른 규칙 종류, final_rules: 서버가 고친 뒤 규칙 종류, repairs: 서버가 고친 것
+    - outcome: 사용자가 어떻게 했는지. APPLIED(반영) · MOVED_ON(반영하지 않고 다른 말을 함) · ANSWERED(되물음에 답함)
+    - manual_fixes: 반영한 뒤 체크 표에서 손으로 다시 고친 품목. AI가 틀렸다는 가장 강한 신호다
+    """
+
+    __tablename__ = "nl_logs"
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), index=True)
+    text: Mapped[str] = mapped_column(String(600))
+    answers_id: Mapped[int | None] = mapped_column(BigId, nullable=True)  # 이 말이 답한 되물음 기록
+    provider: Mapped[str] = mapped_column(String(16))
+    raw: Mapped[str] = mapped_column(Text)
+    model_rules: Mapped[list] = mapped_column(JSON)
+    final_rules: Mapped[list] = mapped_column(JSON)
+    repairs: Mapped[list] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(24))
+    changes: Mapped[list] = mapped_column(JSON)
+    elapsed_ms: Mapped[int] = mapped_column(Integer)
+    outcome: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    outcome_at: Mapped[datetime | None] = mapped_column(TS, nullable=True)
+    manual_fixes: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(TS, default=utcnow)

@@ -162,7 +162,7 @@ function SayBox({ token, members, chat, setChat, onApplied }) {
     try {
       await api.applyChanges(token, result.changes.map((c) => ({
         item_id: c.item_id, member_ids: c.after_member_ids, ...(c.after_amount !== c.before_amount ? { amount: c.after_amount } : {}),
-      })))
+      })), result.interpretation_id)
       setChat((c) => c.map((m, i) => (i === n ? { ...m, applied: true } : m)))
       onApplied(result.changes.map((c) => c.item_id))
     } catch (err) {

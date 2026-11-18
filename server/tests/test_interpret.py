@@ -360,3 +360,86 @@ def test_no_fix_without_grounding(api, room, receipt, monkeypatch):
     """문장에 품목 이름이 없으면 고치지 않고 다시 묻는다."""
     model_says(monkeypatch, parsed({"receipt_item_id": 999999, "type": "EXCLUDE", "params": {"member_ids": [ids(room)[2]]}}))
     assert ask(api, room, "현우는 안 마셨어").json()["status"] == "NEEDS_CLARIFICATION"
+
+
+# ------------------------------------------------------------------ AI 판단 기록 (nl_logs)
+
+
+@pytest.fixture
+def db(client):
+    from app.db import get_db
+    from app.main import app
+    session = next(app.dependency_overrides[get_db]())
+    yield session
+    session.close()
+
+
+def logs(db):
+    from app.models import NlLog
+    db.expire_all()
+    return db.query(NlLog).order_by(NlLog.id).all()
+
+
+def test_log_records_model_answer_repair_and_apply(api, db, room, receipt, monkeypatch):
+    a, b, c, d = ids(room)
+    meat = item_id(receipt, "삼겹살")
+    model_says(monkeypatch, parsed({"receipt_item_id": meat, "type": "EXCLUDE", "params": {"member_ids": [b, c]}}))
+    got = ask(api, room, "삼겹살은 지영이랑 현우만 먹었어").json()
+
+    [entry] = logs(db)
+    assert got["interpretation_id"] == entry.id
+    assert (entry.model_rules, entry.final_rules, entry.repairs) == (["EXCLUDE"], ["EQUAL"], ["EXCLUDE→EQUAL"])
+    assert entry.text == "삼겹살은 지영이랑 현우만 먹었어" and entry.status == "PARSED" and entry.outcome is None
+    assert '"EXCLUDE"' in entry.raw
+
+    ch = got["changes"][0]
+    apply_body = {"changes": [{"item_id": ch["item_id"], "member_ids": ch["after_member_ids"]}],
+                  "interpretation_id": got["interpretation_id"]}
+    api.post(f"/rooms/{room['room_token']}/checks/apply", apply_body, expect=200)
+    assert logs(db)[0].outcome == "APPLIED"
+
+
+def test_moving_on_without_apply_is_recorded(api, db, room, receipt, monkeypatch):
+    model_says(monkeypatch, parsed({"receipt_item_id": item_id(receipt, "소주"), "type": "EXCLUDE",
+                                    "params": {"member_ids": [ids(room)[3]]}}))
+    ask(api, room, "수아는 소주 안 마셨어")
+    ask(api, room, "수아는 소주 안 마셨다니까")
+    first, second = logs(db)
+    assert (first.outcome, second.outcome) == ("MOVED_ON", None)
+
+
+def test_answering_a_question_is_linked(api, db, room, receipt):
+    q = ask(api, room, "수아는 안 마셨어").json()  # stub: 품목이 없어서 되묻는다
+    assert q["status"] == "NEEDS_CLARIFICATION"
+    ans = api.post(f"/rooms/{room['room_token']}/checks/interpret", {"text": "소주", "previous": q["text"]},
+                   expect=200).json()
+    first, second = logs(db)
+    assert first.outcome == "ANSWERED" and second.answers_id == first.id
+    assert ans["interpretation_id"] == second.id
+
+
+def test_manual_fix_after_apply_is_recorded(api, db, room, receipt, monkeypatch):
+    """AI가 '수아 빼기'를 반영했는데 사용자가 체크 표에서 현우까지 빼면, AI가 틀렸다는 기록이 남는다."""
+    a, b, c, d = ids(room)
+    soju = item_id(receipt, "소주")
+    model_says(monkeypatch, parsed({"receipt_item_id": soju, "type": "EXCLUDE", "params": {"member_ids": [d]}}))
+    got = ask(api, room, "수아는 소주 안 마셨어").json()
+    api.post(f"/rooms/{room['room_token']}/checks/apply",
+             {"changes": [{"item_id": soju, "member_ids": [a, b, c]}], "interpretation_id": got["interpretation_id"]},
+             expect=200)
+    api.put(f"/rooms/{room['room_token']}/checks", {"items": [{"item_id": soju, "member_ids": [a, b]}]})
+    [entry] = logs(db)
+    assert [(f["name"], f["ai_member_ids"], f["user_member_ids"]) for f in entry.manual_fixes] == [
+        ("소주", [a, b, c], [a, b])]
+
+
+def test_saving_same_checks_is_not_a_fix(api, db, room, receipt, monkeypatch):
+    a, b, c, d = ids(room)
+    soju = item_id(receipt, "소주")
+    model_says(monkeypatch, parsed({"receipt_item_id": soju, "type": "EXCLUDE", "params": {"member_ids": [d]}}))
+    got = ask(api, room, "수아는 소주 안 마셨어").json()
+    api.post(f"/rooms/{room['room_token']}/checks/apply",
+             {"changes": [{"item_id": soju, "member_ids": [a, b, c]}], "interpretation_id": got["interpretation_id"]},
+             expect=200)
+    api.put(f"/rooms/{room['room_token']}/checks", {"items": [{"item_id": soju, "member_ids": [c, b, a]}]})
+    assert logs(db)[0].manual_fixes == []

@@ -79,7 +79,7 @@ export const api = {
   // 문장 → 체크 표 변경안 (저장하지 않음)
   interpretChecks: (t, text, previous) => request('POST', `${room(t)}/checks/interpret`, previous ? { text, previous } : { text }, 90000),
   // 변경안 적용: 체크 + (이미 보낸 돈을 뺀) 금액을 서버에 바로 저장한다
-  applyChanges: (t, changes) => request('POST', `${room(t)}/checks/apply`, { changes }),
+  applyChanges: (t, changes, interpretationId) => request('POST', `${room(t)}/checks/apply`, { changes, interpretation_id: interpretationId }),
 
   recalculate: (t) => request('POST', `${room(t)}/settlements`),
   getLatestSettlement: (t) => request('GET', `${room(t)}/settlements/latest`),

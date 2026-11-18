@@ -203,6 +203,7 @@ class InterpretOut(Out):
     changes: list[InterpretChangeOut] = Field(description="PARSED일 때만 채워진다. 저장은 하지 않는다")
     provider: str = Field(description="stub(모델 없이 흉내) 또는 llama(llama.cpp · EXAONE)")
     elapsed_ms: int = Field(description="해석에 걸린 시간 (밀리초)")
+    interpretation_id: int = Field(description="이 해석의 기록 번호. 반영할 때 apply로 같이 보낸다")
 
 
 class ApplyLineIn(In):
@@ -213,6 +214,7 @@ class ApplyLineIn(In):
 
 class ApplyIn(In):
     changes: list[ApplyLineIn] = Field(min_length=1)
+    interpretation_id: int | None = Field(default=None, description="반영하는 해석의 기록 번호 (기록에 '반영함'으로 남긴다)")
 
 
 # ------------------------------------------------------------------ 정산 결과 (5단계)

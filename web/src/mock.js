@@ -59,7 +59,7 @@ function interpretStub(r, said, previous) {
   const who = members.filter((m) => text.includes(m.name)).map((m) => m.id)
   const what = items.filter((it) => text.includes(it.name))
   const has = (...keys) => keys.some((k) => text.includes(k))
-  const out = (status, message, changes = []) => ({ status, message, changes, text, provider: 'stub', elapsed_ms: 0 })
+  const out = (status, message, changes = []) => ({ status, message, changes, text, provider: 'stub', elapsed_ms: 0, interpretation_id: 0 })
   if (who.length && !what.length) return out('NEEDS_CLARIFICATION', has('안 먹', '안 마', '빼') ? '어떤 메뉴인가요? 알려 주시면 그 메뉴에서 뺄게요.' : '어떤 품목인지 알려 주세요.')
   if (!who.length || !what.length) return out('NEEDS_CLARIFICATION', '어떤 품목을 누가 내는지 알려 주세요.')
   const order = (ids) => members.map((m) => m.id).filter((id) => ids.includes(id))

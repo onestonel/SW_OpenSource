@@ -250,6 +250,8 @@ class Checked:
     status: str  # PARSED · NEEDS_CLARIFICATION · UNSUPPORTED
     proposals: list[dict]
     message: str
+    model_rules: list[str] = field(default_factory=list)  # 모델이 원래 고른 규칙 종류 (고치기 전)
+    repairs: list[str] = field(default_factory=list)  # 서버가 고친 것
 
 
 def _clarify(question: str | None = None) -> Checked:
@@ -260,7 +262,7 @@ ONLY = re.compile(r"(만|끼리)\s*(먹|마시|마셨|탔|타|했|하|썼|쓰|�
 NOT = ("안 ", "안먹", "안마", "안탔", "안 탔", "빼고", "빼줘", "빼 줘", "제외", "못 ")
 
 
-def _repair(p: dict, text: str, room: RoomData, used: set[int]) -> dict:
+def _repair(p: dict, text: str, room: RoomData, used: set[int]) -> tuple[dict, list[str]]:
     """작은 모델이 자주 하는 실수를 문장에 근거해서만 고친다 (11/18 실제 EXAONE 시험에서 본 실수).
 
     - "~만 탔어"를 빼기(EXCLUDE)로, "~ 안 먹었어"를 끼리만(EQUAL)으로 거꾸로 고른 경우 → 문장 표현대로 바꾼다
@@ -268,29 +270,35 @@ def _repair(p: dict, text: str, room: RoomData, used: set[int]) -> dict:
     문장에 근거가 없으면 고치지 않고, 뒤의 검사에서 다시 묻기로 간다.
     """
     p = {**p, "params": dict(p.get("params") or {})}
+    fixed: list[str] = []  # 무엇을 고쳤는지 (기록 · 집계용)
     items = {it.id: it for it in room.items}
     named_items = [it.id for it in room.items if it.name in text and it.id not in used]
     named_people = [i for i, n in room.members if n in text]
     item = p.get("receipt_item_id")
     if (item not in items or items[item].name not in text) and len(named_items) == 1:
         p["receipt_item_id"] = named_items[0]
+        fixed.append("품목")
     t = p.get("type")
     only, neg = bool(ONLY.search(text)), any(k in text for k in NOT)
     if t == "EXCLUDE" and only and not neg:
         p["type"] = "EQUAL"
+        fixed.append("EXCLUDE→EQUAL")
     elif t == "EQUAL" and neg and not only:
         p["type"] = "EXCLUDE"
+        fixed.append("EQUAL→EXCLUDE")
     t = p["type"]
     if t in ("EQUAL", "EXCLUDE", "PAID"):
         ids = p["params"].get("member_ids")
         bad = not isinstance(ids, list) or not ids or any(i not in room.names or room.names[i] not in text for i in ids)
         if bad and named_people:
             p["params"]["member_ids"] = named_people
+            fixed.append("사람")
     elif t == "FULL":
         mid = p["params"].get("member_id")
         if (mid not in room.names or room.names[mid] not in text) and len(named_people) == 1:
             p["params"]["member_id"] = named_people[0]
-    return p
+            fixed.append("사람")
+    return p, fixed
 
 
 def validate(raw: str, text: str, room: RoomData) -> Checked:
@@ -302,18 +310,31 @@ def validate(raw: str, text: str, room: RoomData) -> Checked:
     if not isinstance(result, dict) or result.get("status") not in ("PARSED", "NEEDS_CLARIFICATION", "UNSUPPORTED"):
         return _clarify()
     if result["status"] == "UNSUPPORTED":
-        return Checked("UNSUPPORTED", [], "정산과 관계없는 문장 같아요. 누가 어떤 품목을 내는지 말해 주세요.")
+        return Checked("UNSUPPORTED", [], "정산과 관계없는 문장 같아요. 누가 어떤 품목을 내는지 말해 주세요.",
+                       model_rules=["UNSUPPORTED"])
     if result["status"] == "NEEDS_CLARIFICATION":
         question = (result.get("clarification") or {}).get("question")
-        return _clarify(question if isinstance(question, str) and question.strip() else None)
+        c = _clarify(question if isinstance(question, str) and question.strip() else None)
+        c.model_rules = ["NEEDS_CLARIFICATION"]
+        return c
 
+    proposals = [p for p in (result.get("proposals") or []) if isinstance(p, dict)]
+    model_rules = [str(p.get("type")) for p in proposals]
+    repairs: list[str] = []
+    checked = _check_parsed(result, text, room, repairs)
+    checked.model_rules, checked.repairs = model_rules, repairs
+    return checked
+
+
+def _check_parsed(result: dict, text: str, room: RoomData, repairs: list[str]) -> Checked:
     items = {it.id: it for it in room.items}
     member_ids = [i for i, _ in room.members]
     merged: dict[int, dict] = {}
     for p in result.get("proposals") or []:
         if not isinstance(p, dict):
             return _clarify()
-        p = _repair(p, text, room, set(merged))
+        p, fixed = _repair(p, text, room, set(merged))
+        repairs += fixed
         item, rule_type, params = p.get("receipt_item_id"), p.get("type"), p.get("params") or {}
         if item not in items or rule_type not in PARAMS:
             return _clarify()
@@ -420,6 +441,9 @@ def interpret(room: RoomData, text: str, previous: str | None = None) -> dict[st
     raw = call_model(room, full)
     log.info("문장 해석 provider=%s text=%r raw=%s", settings.nl_provider, full, raw)
     elapsed_ms = int((time.perf_counter() - start) * 1000)
-    status, message, changes = to_changes(validate(raw, full, room), room)
+    checked = validate(raw, full, room)
+    status, message, changes = to_changes(checked, room)
+    trace = {"raw": raw, "model_rules": checked.model_rules, "repairs": checked.repairs,
+             "final_rules": [p["type"] for p in checked.proposals] if checked.status == "PARSED" else [checked.status]}
     return {"status": status, "message": message, "changes": changes, "text": full,
-            "provider": settings.nl_provider, "elapsed_ms": elapsed_ms}
+            "provider": settings.nl_provider, "elapsed_ms": elapsed_ms, "trace": trace}
