@@ -15,6 +15,8 @@ PAID는 금액을 바꾼다. 모델은 누가 보냈는지만 알려 주고, 남
 from __future__ import annotations
 
 import json
+import logging
+import re
 import time
 import urllib.error
 import urllib.request
@@ -23,6 +25,8 @@ from typing import Any
 
 from .core.config import settings
 from .core.errors import AppError
+
+log = logging.getLogger("settle.nl")
 
 TYPES = ["EQUAL", "EXCLUDE", "FULL", "PAID", "WEIGHTED", "QUANTITY"]
 CHECKABLE = {"EQUAL", "EXCLUDE", "FULL", "PAID"}
@@ -129,6 +133,10 @@ SYSTEM_PROMPT = """너는 정산 앱의 '분담 조건 해석기'다. 사용자�
 예시 (데이터에 '커피'(id 900, quantity 1)가 있을 때):
 문장: 커피는 A만 마셨어
 답: {"status":"PARSED","proposals":[{"receipt_item_id":900,"type":"FULL","params":{"member_id":1},"evidence":"커피는 A만 마셨어"}],"clarification":null}
+문장: B랑 C만 커피 마셨어
+답: {"status":"PARSED","proposals":[{"receipt_item_id":900,"type":"EQUAL","params":{"member_ids":[2,3]},"evidence":"B랑 C만 커피 마셨어"}],"clarification":null}
+문장: C는 커피 안 마셨어
+답: {"status":"PARSED","proposals":[{"receipt_item_id":900,"type":"EXCLUDE","params":{"member_ids":[3]},"evidence":"C는 커피 안 마셨어"}],"clarification":null}
 문장: B랑 C는 커피값 보냈어
 답: {"status":"PARSED","proposals":[{"receipt_item_id":900,"type":"PAID","params":{"member_ids":[2,3]},"evidence":"B랑 C는 커피값 보냈어"}],"clarification":null}
 """
@@ -248,6 +256,43 @@ def _clarify(question: str | None = None) -> Checked:
     return Checked("NEEDS_CLARIFICATION", [], question or ASK_AGAIN)
 
 
+ONLY = re.compile(r"(만|끼리)\s*(먹|마시|마셨|탔|타|했|하|썼|쓰|갔|가|샀|사|시켰|이용|$)")
+NOT = ("안 ", "안먹", "안마", "안탔", "안 탔", "빼고", "빼줘", "빼 줘", "제외", "못 ")
+
+
+def _repair(p: dict, text: str, room: RoomData, used: set[int]) -> dict:
+    """작은 모델이 자주 하는 실수를 문장에 근거해서만 고친다 (11/18 실제 EXAONE 시험에서 본 실수).
+
+    - "~만 탔어"를 빼기(EXCLUDE)로, "~ 안 먹었어"를 끼리만(EQUAL)으로 거꾸로 고른 경우 → 문장 표현대로 바꾼다
+    - 품목 · 사람 번호를 틀리게 낸 경우 → 문장에 이름이 그대로 나온 품목 · 사람으로 바꾼다
+    문장에 근거가 없으면 고치지 않고, 뒤의 검사에서 다시 묻기로 간다.
+    """
+    p = {**p, "params": dict(p.get("params") or {})}
+    items = {it.id: it for it in room.items}
+    named_items = [it.id for it in room.items if it.name in text and it.id not in used]
+    named_people = [i for i, n in room.members if n in text]
+    item = p.get("receipt_item_id")
+    if (item not in items or items[item].name not in text) and len(named_items) == 1:
+        p["receipt_item_id"] = named_items[0]
+    t = p.get("type")
+    only, neg = bool(ONLY.search(text)), any(k in text for k in NOT)
+    if t == "EXCLUDE" and only and not neg:
+        p["type"] = "EQUAL"
+    elif t == "EQUAL" and neg and not only:
+        p["type"] = "EXCLUDE"
+    t = p["type"]
+    if t in ("EQUAL", "EXCLUDE", "PAID"):
+        ids = p["params"].get("member_ids")
+        bad = not isinstance(ids, list) or not ids or any(i not in room.names or room.names[i] not in text for i in ids)
+        if bad and named_people:
+            p["params"]["member_ids"] = named_people
+    elif t == "FULL":
+        mid = p["params"].get("member_id")
+        if (mid not in room.names or room.names[mid] not in text) and len(named_people) == 1:
+            p["params"]["member_id"] = named_people[0]
+    return p
+
+
 def validate(raw: str, text: str, room: RoomData) -> Checked:
     """모델 답을 검사한다. 고칠 수 있으면 고치고, 아니면 다시 묻기로 바꾼다."""
     try:
@@ -268,6 +313,7 @@ def validate(raw: str, text: str, room: RoomData) -> Checked:
     for p in result.get("proposals") or []:
         if not isinstance(p, dict):
             return _clarify()
+        p = _repair(p, text, room, set(merged))
         item, rule_type, params = p.get("receipt_item_id"), p.get("type"), p.get("params") or {}
         if item not in items or rule_type not in PARAMS:
             return _clarify()
@@ -372,6 +418,7 @@ def interpret(room: RoomData, text: str, previous: str | None = None) -> dict[st
     full = f"{previous.strip()} {text.strip()}" if previous and previous.strip() else text.strip()
     start = time.perf_counter()
     raw = call_model(room, full)
+    log.info("문장 해석 provider=%s text=%r raw=%s", settings.nl_provider, full, raw)
     elapsed_ms = int((time.perf_counter() - start) * 1000)
     status, message, changes = to_changes(validate(raw, full, room), room)
     return {"status": status, "message": message, "changes": changes, "text": full,

@@ -156,13 +156,13 @@ def test_member_not_in_sentence_asks_again(api, room, receipt, monkeypatch):
     assert "사람" in got["message"]
 
 
-def test_item_not_in_sentence_asks_again(api, room, receipt, monkeypatch):
+def test_item_not_in_sentence_is_replaced_by_named_item(api, room, receipt, monkeypatch):
+    """모델이 문장에 없는 품목(삼겹살)을 고르면, 문장에 나온 품목(소주)으로 고친다."""
     a, b, c, d = ids(room)
     model_says(monkeypatch, parsed({"receipt_item_id": item_id(receipt, "삼겹살"), "type": "EXCLUDE",
                                     "params": {"member_ids": [d]}}))
     got = ask(api, room, "수아는 소주 안 마셨어").json()
-    assert got["status"] == "NEEDS_CLARIFICATION"
-    assert "품목" in got["message"]
+    assert (got["changes"][0]["name"], got["changes"][0]["after_member_ids"]) == ("소주", [a, b, c])
 
 
 def test_excluding_everyone_asks_again(api, room, receipt, monkeypatch):
@@ -327,3 +327,37 @@ def test_follow_up_answer_is_joined_with_previous(api, room, monkeypatch):
     assert seen == ["수아는 아침 안 먹었어 해장국이랑 김밥"]
     assert second["status"] == "PARSED"
     assert [(ch["name"], ch["after_member_ids"]) for ch in second["changes"]] == [("해장국", [a, b, c]), ("김밥", [a, b, c])]
+
+
+# ------------------------------------------------------------------ 작은 모델의 실수를 문장에 근거해 고치기 (11/18 실제 EXAONE)
+
+
+def test_only_sentence_read_as_exclude_is_fixed(api, room, receipt, monkeypatch):
+    """'지영이랑 현우만 탔어'를 EXAONE이 '지영 · 현우 빼기'로 답했다 → 끼리만으로 고친다."""
+    a, b, c, d = ids(room)
+    model_says(monkeypatch, parsed({"receipt_item_id": item_id(receipt, "삼겹살"), "type": "EXCLUDE",
+                                    "params": {"member_ids": [b, c]}}))
+    got = ask(api, room, "삼겹살은 지영이랑 현우만 먹었어").json()
+    assert (got["changes"][0]["rule"], got["changes"][0]["after_member_ids"]) == ("EQUAL", [b, c])
+
+
+def test_negative_sentence_read_as_equal_is_fixed(api, room, receipt, monkeypatch):
+    a, b, c, d = ids(room)
+    model_says(monkeypatch, parsed({"receipt_item_id": item_id(receipt, "소주"), "type": "EQUAL",
+                                    "params": {"member_ids": [c]}}))
+    got = ask(api, room, "현우는 소주 안 마셨어").json()
+    assert got["changes"][0]["after_member_ids"] == [a, b, d]
+
+
+def test_wrong_item_and_member_ids_are_fixed_from_sentence(api, room, receipt, monkeypatch):
+    a, b, c, d = ids(room)
+    model_says(monkeypatch, parsed({"receipt_item_id": 999999, "type": "EXCLUDE", "params": {"member_ids": [77]}}))
+    got = ask(api, room, "현우는 소주 안 마셨어").json()
+    assert got["status"] == "PARSED"
+    assert (got["changes"][0]["name"], got["changes"][0]["after_member_ids"]) == ("소주", [a, b, d])
+
+
+def test_no_fix_without_grounding(api, room, receipt, monkeypatch):
+    """문장에 품목 이름이 없으면 고치지 않고 다시 묻는다."""
+    model_says(monkeypatch, parsed({"receipt_item_id": 999999, "type": "EXCLUDE", "params": {"member_ids": [ids(room)[2]]}}))
+    assert ask(api, room, "현우는 안 마셨어").json()["status"] == "NEEDS_CLARIFICATION"
