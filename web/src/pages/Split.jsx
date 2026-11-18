@@ -7,12 +7,21 @@ import { BackLink, ErrorText, Loading, Page } from '../ui.jsx'
 // ④ 분담 조건: 확정한 영수증의 품목 × 구성원 체크 표
 export default function Split() {
   const { token } = useParams()
-  const { data, error } = useLoad(() => Promise.all([api.getChecks(token), api.listReceipts(token)]), [token])
+  const { data, error, reload } = useLoad(() => Promise.all([api.getChecks(token), api.listReceipts(token)]), [token])
+  const [flash, setFlash] = useState([]) // AI 총무가 방금 바꾼 품목 (잠깐 강조)
+  const [chat, setChat] = useState([]) // AI 총무 대화 (체크 표를 다시 받아도 남게 여기에 둔다)
   if (!data) return <Loading error={error} back={`/rooms/${token}`} />
-  return <Table token={token} checks={data[0]} receipts={data[1]} />
+  const applied = (itemIds) => {
+    setFlash(itemIds)
+    setTimeout(() => setFlash([]), 2500)
+    reload()
+  }
+  // 다시 받은 체크 표로 새로 그리도록 key를 바꾼다 (손으로 체크하던 칸은 서버 값으로 돌아간다)
+  const key = data[0].items.map((it) => `${it.item_id}:${it.amount}:${it.member_ids.join('.')}`).join('|')
+  return <Table key={key} token={token} checks={data[0]} receipts={data[1]} flash={flash} chat={chat} setChat={setChat} onApplied={applied} />
 }
 
-function Table({ token, checks, receipts }) {
+function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
   const navigate = useNavigate()
   const base = `/rooms/${token}`
   const { members, items } = checks
@@ -25,18 +34,10 @@ function Table({ token, checks, receipts }) {
   const groups = [...new Set(items.map((it) => it.receipt_id))].map((rid) => items.filter((it) => it.receipt_id === rid))
   const cols = { gridTemplateColumns: `minmax(72px, 1fr) repeat(${members.length}, 44px)` }
 
-  const [flash, setFlash] = useState([]) // 문장으로 방금 바꾼 품목 (잠깐 강조)
 
   const toggle = (itemId, memberId) => {
     const now = picked[itemId]
     setPicked({ ...picked, [itemId]: now.includes(memberId) ? now.filter((m) => m !== memberId) : [...now, memberId] })
-  }
-
-  // 문장 해석 변경안을 체크 표에 반영한다. 저장은 아래 '저장' 버튼으로 (손으로 체크한 것과 똑같이)
-  const applyChanges = (changes) => {
-    setPicked({ ...picked, ...Object.fromEntries(changes.map((c) => [c.item_id, c.after_member_ids])) })
-    setFlash(changes.map((c) => c.item_id))
-    setTimeout(() => setFlash([]), 2500)
   }
 
   async function save() {
@@ -71,7 +72,7 @@ function Table({ token, checks, receipts }) {
         </div>
       )}
 
-      {groups.length > 0 && <SayBox token={token} members={members} onApply={applyChanges} />}
+      {groups.length > 0 && <SayBox token={token} members={members} chat={chat} setChat={setChat} onApplied={onApplied} />}
 
       {groups.map((rows) => (
         <div key={rows[0].receipt_id} className="glass check-card">
@@ -123,25 +124,30 @@ function Table({ token, checks, receipts }) {
   )
 }
 
-const RULE_LABEL = { EXCLUDE: '빼기', FULL: '한 명이 다 내기', EQUAL: '~끼리만' }
+const RULE_LABEL = { EXCLUDE: '빼기', FULL: '한 명이 다 내기', EQUAL: '~끼리만', PAID: '이미 보낸 돈 빼기' }
 
-// 말로 바꾸기: "수아는 소주 안 마셨어" → 서버(LLM)가 변경안을 주면 보여 주고, 적용하면 체크 표에 반영
-function SayBox({ token, members, onApply }) {
+// AI 총무: 말하면 체크 표 변경안을 보여 주고, 반영하면 서버에 바로 저장한다.
+// AI가 되물으면(NEEDS_CLARIFICATION) 다음 말은 앞 문장에 이어서 해석한다.
+function SayBox({ token, members, chat, setChat, onApplied }) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const nameOf = Object.fromEntries(members.map((m) => [m.id, m.name]))
-  const names = (ids) => ids.map((id) => nameOf[id]).join(' · ')
+  const names = (ids) => ids.map((id) => nameOf[id]).join(', ')
+  const last = chat.at(-1)
+  const previous = last?.from === 'ai' && last.result.status === 'NEEDS_CLARIFICATION' ? last.result.text : undefined
 
   async function ask(e) {
     e.preventDefault()
-    if (!text.trim() || busy) return
+    const said = text.trim()
+    if (!said || busy) return
     setBusy(true)
     setError(null)
-    setResult(null)
+    setChat((c) => [...c, { from: 'me', text: said }])
+    setText('')
     try {
-      setResult(await api.interpretChecks(token, text.trim()))
+      const result = await api.interpretChecks(token, said, previous)
+      setChat((c) => [...c, { from: 'ai', result }])
     } catch (err) {
       setError(err)
     } finally {
@@ -149,41 +155,61 @@ function SayBox({ token, members, onApply }) {
     }
   }
 
-  function apply() {
-    onApply(result.changes)
-    setResult(null)
-    setText('')
+  async function apply(n) {
+    const { result } = chat[n]
+    setBusy(true)
+    setError(null)
+    try {
+      await api.applyChanges(token, result.changes.map((c) => ({
+        item_id: c.item_id, member_ids: c.after_member_ids, ...(c.after_amount !== c.before_amount ? { amount: c.after_amount } : {}),
+      })))
+      setChat((c) => c.map((m, i) => (i === n ? { ...m, applied: true } : m)))
+      onApplied(result.changes.map((c) => c.item_id))
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <form className="glass card-pad stack-10" onSubmit={ask}>
-      <label htmlFor="say" className="field-label">말로 바꾸기</label>
-      <div className="say-row">
-        <input id="say" className="input" type="text" maxLength={200} placeholder='예: 수아는 소주 안 마셨어'
-          value={text} onChange={(e) => setText(e.target.value)} disabled={busy} />
-        <button type="submit" className="btn-secondary say-btn" disabled={busy || !text.trim()}>{busy ? '읽는 중…' : '해석'}</button>
+      <div className="stack-4">
+        <label htmlFor="say" className="field-label">AI 총무에게 말하기</label>
+        <span className="muted-13">예: 현우는 술 안 마셨어 · 패러글라이딩은 지영이랑 현우만 탔어 · 현우랑 수아는 숙소비 보냈어</span>
       </div>
-      {busy && <p className="muted-13">AI가 문장을 읽고 있어요. 5~10초 걸려요.</p>}
-      <ErrorText error={error} />
-      {result && (
-        <div className="stack-10">
-          <p className="muted-14" style={{ color: 'var(--text)' }}>{result.message}</p>
-          {result.changes.map((c) => (
-            <div key={c.item_id} className="say-change">
-              <span className="strong">{c.name}</span>
-              <span className="muted-13">{c.store_name} · {RULE_LABEL[c.rule]}</span>
-              <span className="muted-13"><s>{names(c.before_member_ids)}</s> → <b style={{ color: 'var(--text)' }}>{names(c.after_member_ids)}</b></span>
-            </div>
-          ))}
-          {result.changes.length > 0 && (
-            <div className="say-row">
-              <button type="button" className="btn-primary" onClick={apply}>체크 표에 반영</button>
-              <button type="button" className="btn-secondary say-btn" onClick={() => setResult(null)}>취소</button>
-            </div>
-          )}
-          <p className="muted-13">{result.provider !== 'stub' ? `EXAONE · ${(result.elapsed_ms / 1000).toFixed(1)}초` : '모델 없이 흉내(stub)'}</p>
+      {chat.length > 0 && (
+        <div className="chat">
+          {chat.map((m, n) => (m.from === 'me'
+            ? <div key={n} className="bubble bubble--me">{m.text}</div>
+            : (
+              <div key={n} className="bubble bubble--ai stack-10">
+                <span>{m.result.message}</span>
+                {m.result.changes.map((c) => (
+                  <div key={c.item_id} className="say-change">
+                    <span className="strong">{c.name} <span className="muted-13" style={{ fontWeight: 400 }}>{c.store_name} · {RULE_LABEL[c.rule]}</span></span>
+                    {c.note && <span className="muted-13" style={{ color: 'var(--text)' }}>{c.note}</span>}
+                    {c.after_amount !== c.before_amount && (
+                      <span className="muted-13">금액 <s>{won(c.before_amount)}원</s> → <b style={{ color: 'var(--text)' }}>{won(c.after_amount)}원</b></span>
+                    )}
+                    <span className="muted-13">체크 <s>{names(c.before_member_ids)}</s> → <b style={{ color: 'var(--text)' }}>{names(c.after_member_ids)}</b></span>
+                  </div>
+                ))}
+                {m.result.changes.length > 0 && (m.applied
+                  ? <span className="muted-13">✓ 체크 표에 반영했어요</span>
+                  : <button type="button" className="btn-primary say-apply" disabled={busy} onClick={() => apply(n)}>반영</button>)}
+                <span className="muted-13">{m.result.provider !== 'stub' ? `EXAONE · ${(m.result.elapsed_ms / 1000).toFixed(1)}초` : '모델 없이 흉내(stub)'}</span>
+              </div>
+            )))}
         </div>
       )}
+      <div className="say-row">
+        <input id="say" className="input" type="text" maxLength={200} disabled={busy} value={text} onChange={(e) => setText(e.target.value)}
+          placeholder={previous ? '답을 입력하세요' : '예: 수아는 아침 안 먹었어'} />
+        <button type="submit" className="btn-secondary say-btn" disabled={busy || !text.trim()}>{busy ? '읽는 중…' : '보내기'}</button>
+      </div>
+      {busy && <p className="muted-13">AI가 읽고 있어요. 5~10초 걸려요.</p>}
+      <ErrorText error={error} />
     </form>
   )
 }

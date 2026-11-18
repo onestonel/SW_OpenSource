@@ -44,6 +44,30 @@ def copy_text(room_name: str, version: int, transfers: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _josa(name: str, with_batchim: str, without: str) -> str:
+    last = name[-1] if name else ""
+    has = "가" <= last <= "힣" and (ord(last) - 0xAC00) % 28 != 0
+    return name + (with_batchim if has else without)
+
+
+def explain(t, lines: list[dict], names: dict[int, str]) -> str | None:
+    """두 사람이 서로 보낼 돈이 있어서 합쳐졌을 때만, 어떻게 합쳤는지 문장으로 설명한다.
+
+    예: 지영이 민수에게 보낼 250,000원(비행기 100,000원, 저녁 150,000원)에서 민수가 지영에게 보낼 숙소 100,000원을
+    빼서, 지영은 민수에게 150,000원만 보내면 돼요.
+    """
+    same = [x for x in lines if x["from_id"] == t.from_id]
+    back = [x for x in lines if x["from_id"] == t.to_id]
+    if not back:
+        return None
+    a, b = names[t.from_id], names[t.to_id]
+    def part(xs):  # noqa: E306
+        return ", ".join(f"{x['store_name']} {x['amount']:,}원" for x in xs)
+    return (f"{_josa(a, '이', '가')} {b}에게 보낼 {sum(x['amount'] for x in same):,}원({part(same)})에서 "
+            f"{_josa(b, '이', '가')} {a}에게 보낼 {part(back)}을 빼서, "
+            f"{_josa(a, '은', '는')} {b}에게 {t.amount:,}원만 보내면 돼요.")
+
+
 def calculate(room: Room, receipts: list[Receipt], version: int) -> dict:
     """확정 영수증으로 계산해서 저장할 결과(답장에서 version · created_at · rounding · is_stale을 뺀 것)를 만든다."""
     confirmed = [r for r in receipts if r.status == "CONFIRMED"]
@@ -58,8 +82,15 @@ def calculate(room: Room, receipts: list[Receipt], version: int) -> dict:
         raise AppError(422, code, e.message, e.details) from e
 
     names = {m.id: m.name for m in room.members}
-    transfers = [{"from": {"id": t.from_id, "name": names[t.from_id]}, "to": {"id": t.to_id, "name": names[t.to_id]},
-                  "amount": t.amount} for t in result.transfers]
+    titles = {r.id: r.store_name for r in confirmed}
+    raw = [(titles[rr.receipt_id], t) for rr in result.receipts for t in rr.transfers]  # 합치기 전, 영수증별
+    transfers = []
+    for t in result.transfers:
+        lines = [{"store_name": title, "from_id": x.from_id, "to_id": x.to_id, "amount": x.amount}
+                 for title, x in raw if {x.from_id, x.to_id} == {t.from_id, t.to_id}]
+        transfers.append({"from": {"id": t.from_id, "name": names[t.from_id]},
+                          "to": {"id": t.to_id, "name": names[t.to_id]}, "amount": t.amount,
+                          "breakdown": lines, "explanation": explain(t, lines, names)})
     return {
         "members": [{"member_id": b.member_id, "name": names[b.member_id], "paid": b.paid, "owed": b.owed,
                      "net": b.net} for b in result.balances],

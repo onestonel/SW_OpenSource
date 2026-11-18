@@ -72,6 +72,7 @@ def test_exclude_removes_member_and_does_not_save(api, room, receipt, monkeypatc
         "item_id": soju, "receipt_id": receipt["id"], "store_name": "1차 고깃집", "name": "소주",
         "rule": "EXCLUDE", "evidence": "수아는 소주 안 마셨어",
         "before_member_ids": [a, b, c, d], "after_member_ids": [a, b, c],
+        "before_amount": 40000, "after_amount": 40000, "note": None,
     }]
     # 저장하지 않는다
     checks = api.get(f"/rooms/{room['room_token']}/checks").json()
@@ -218,6 +219,7 @@ def test_unknown_room_is_404(api):
 
 @pytest.mark.parametrize("text, rule, after", [
     ("수아는 소주 안 마셨어", "EXCLUDE", [0, 1, 2]),
+    ("현우랑 수아는 소주 민수한테 보냈어", "PAID", [1]),
     ("소주는 지영이가 다 낼게", "FULL", [1]),
     ("삼겹살은 민수랑 현우끼리", "EQUAL", [0, 2]),
 ])
@@ -226,3 +228,102 @@ def test_stub_provider(api, room, receipt, text, rule, after):
     assert got["provider"] == "stub"
     assert got["changes"][0]["rule"] == rule
     assert got["changes"][0]["after_member_ids"] == [ids(room)[n] for n in after]
+
+
+# ------------------------------------------------------------------ 이미 보낸 돈 (PAID) · 적용
+
+
+@pytest.fixture
+def lodging(api, room) -> dict:
+    """지영(2번)이 숙소비 400,000원을 결제한 영수증. 4명 모두 체크."""
+    body = {"store_name": "숙소", "payer_member_id": ids(room)[1], "total_amount": 400000,
+            "items": [{"name": "숙소비", "amount": 400000}]}
+    r = api.post(f"/rooms/{room['room_token']}/receipts", body).json()
+    return api.post(f"/rooms/{room['room_token']}/receipts/{r['id']}/confirm", expect=200).json()
+
+
+def apply(api, room, changes, expect=200):
+    return api.post(f"/rooms/{room['room_token']}/checks/apply", {"changes": changes}, expect=expect)
+
+
+def test_paid_leaves_only_unpaid_share_computed_by_server(api, room, lodging, monkeypatch):
+    a, b, c, d = ids(room)  # 민수 · 지영(결제) · 현우 · 수아
+    item = lodging["items"][0]["id"]
+    model_says(monkeypatch, parsed({"receipt_item_id": item, "type": "PAID", "params": {"member_ids": [c, d]}}))
+
+    got = ask(api, room, "현우랑 수아는 숙소비 지영이한테 보냈어").json()
+    change = got["changes"][0]
+    assert change["rule"] == "PAID"
+    assert change["after_member_ids"] == [a]
+    assert (change["before_amount"], change["after_amount"]) == (400000, 100000)
+    assert change["note"] == ("현우, 수아는 이미 지영에게 보냈으니, 숙소비 400,000원 중 민수 몫 100,000원만 남기고 "
+                              "민수만 체크할게요.")
+
+    apply(api, room, [{"item_id": item, "member_ids": change["after_member_ids"], "amount": change["after_amount"]}])
+    receipt = api.get(f"/rooms/{room['room_token']}/receipts/{lodging['id']}").json()
+    assert receipt["total_amount"] == 100000 and receipt["items"][0]["amount"] == 100000
+    assert receipt["status"] == "CONFIRMED"
+    s = api.post(f"/rooms/{room['room_token']}/settlements").json()
+    assert [(t["from"]["name"], t["to"]["name"], t["amount"]) for t in s["transfers"]] == [("민수", "지영", 100000)]
+
+
+def test_paid_share_keeps_remainder_won(api, room, monkeypatch):
+    a, b, c, d = ids(room)
+    body = {"store_name": "숙소", "payer_member_id": b, "total_amount": 100001, "items": [{"name": "숙소비", "amount": 100001}]}
+    r = api.post(f"/rooms/{room['room_token']}/receipts", body).json()
+    api.post(f"/rooms/{room['room_token']}/receipts/{r['id']}/confirm", expect=200)
+    model_says(monkeypatch, parsed({"receipt_item_id": r["items"][0]["id"], "type": "PAID", "params": {"member_ids": [c, d]}}))
+    # 100,001 ÷ 4 → 민수 25,001 (남는 1원은 구성원 순서대로)
+    assert ask(api, room, "현우랑 수아는 숙소비 보냈어").json()["changes"][0]["after_amount"] == 25001
+
+
+def test_paid_by_everyone_changes_nothing(api, room, lodging, monkeypatch):
+    a, b, c, d = ids(room)
+    model_says(monkeypatch, parsed({"receipt_item_id": lodging["items"][0]["id"], "type": "PAID",
+                                    "params": {"member_ids": [a, c, d]}}))
+    got = ask(api, room, "민수 현우 수아 모두 숙소비 보냈어").json()
+    assert got["changes"] == [] and "모두 이미 냈어요" in got["message"]
+
+
+def test_apply_cannot_raise_amount(api, room, lodging):
+    item = lodging["items"][0]["id"]
+    res = apply(api, room, [{"item_id": item, "member_ids": [ids(room)[0]], "amount": 500000}], expect=422)
+    assert error(res)["code"] == "VALIDATION_ERROR"
+
+
+def test_apply_checks_only_and_marks_stale(api, room, receipt):
+    a, b, c, d = ids(room)
+    api.post(f"/rooms/{room['room_token']}/settlements")
+    apply(api, room, [{"item_id": item_id(receipt, "소주"), "member_ids": [a, b]}])
+    assert api.get(f"/rooms/{room['room_token']}/settlements/latest").json()["is_stale"] is True
+
+
+def test_apply_empty_check_is_rejected(api, room, receipt):
+    res = apply(api, room, [{"item_id": item_id(receipt, "소주"), "member_ids": []}], expect=422)
+    assert error(res)["code"] == "CHECK_EMPTY"
+
+
+# ------------------------------------------------------------------ 되묻기 → 이어서 답하기
+
+
+def test_follow_up_answer_is_joined_with_previous(api, room, monkeypatch):
+    """수아는 아침 안 먹었어 → (메뉴를 되물음) → 해장국이랑 김밥 → 두 품목에서 수아 빼기."""
+    a, b, c, d = ids(room)
+    body = {"store_name": "해장국집", "payer_member_id": a, "total_amount": 40000,
+            "items": [{"name": "해장국", "amount": 30000}, {"name": "김밥", "amount": 10000}]}
+    r = api.post(f"/rooms/{room['room_token']}/receipts", body).json()
+    api.post(f"/rooms/{room['room_token']}/receipts/{r['id']}/confirm", expect=200)
+
+    first = ask(api, room, "수아는 아침 안 먹었어").json()  # stub
+    assert first["status"] == "NEEDS_CLARIFICATION"
+    assert first["message"] == "어떤 메뉴인가요? 알려 주시면 수아를 그 메뉴에서 뺄게요."
+    assert first["text"] == "수아는 아침 안 먹었어"
+
+    seen = []
+    real = nl.call_model
+    monkeypatch.setattr(nl, "call_model", lambda room_, text: seen.append(text) or real(room_, text))
+    second = api.post(f"/rooms/{room['room_token']}/checks/interpret",
+                      {"text": "해장국이랑 김밥", "previous": first["text"]}, expect=200).json()
+    assert seen == ["수아는 아침 안 먹었어 해장국이랑 김밥"]
+    assert second["status"] == "PARSED"
+    assert [(ch["name"], ch["after_member_ids"]) for ch in second["changes"]] == [("해장국", [a, b, c]), ("김밥", [a, b, c])]

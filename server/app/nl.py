@@ -4,8 +4,12 @@
 변경안은 저장하지 않는다. 화면이 사용자에게 보여 주고, 적용하면 기존 체크 표 저장 API(PUT /checks)로 저장한다.
 
 프롬프트 · JSON schema · 서버 검사는 llm/bench.py(PR #13, 11/4 노트북 시험 20문장 중 19개)와 같은 것을 쓴다.
-V1 정산은 "체크한 사람끼리 똑같이"만 계산하므로, 규칙 다섯 가지 중
-EQUAL(~끼리만) · EXCLUDE(~빼고) · FULL(~가 다 낼게)만 체크 표로 바꾼다. WEIGHTED(비율) · QUANTITY(수량)는 안내만 한다.
+V1 정산은 "체크한 사람끼리 똑같이"만 계산하므로, 규칙 중
+EQUAL(~끼리만) · EXCLUDE(~빼고) · FULL(~가 다 낼게) · PAID(~는 이미 보냈어)만 반영한다.
+WEIGHTED(비율) · QUANTITY(수량)는 안내만 한다.
+
+PAID는 금액을 바꾼다. 모델은 누가 보냈는지만 알려 주고, 남은 금액은 서버가 계산한다 (모델은 돈 계산을 하지 않는다).
+결제자와 이미 보낸 사람의 몫을 품목 금액에서 빼고, 아직 안 보낸 사람만 체크한다.
 """
 
 from __future__ import annotations
@@ -20,8 +24,8 @@ from typing import Any
 from .core.config import settings
 from .core.errors import AppError
 
-TYPES = ["EQUAL", "EXCLUDE", "FULL", "WEIGHTED", "QUANTITY"]
-CHECKABLE = {"EQUAL", "EXCLUDE", "FULL"}
+TYPES = ["EQUAL", "EXCLUDE", "FULL", "PAID", "WEIGHTED", "QUANTITY"]
+CHECKABLE = {"EQUAL", "EXCLUDE", "FULL", "PAID"}
 
 # ------------------------------------------------------------------ 출력 모양 (bench.py와 같음)
 
@@ -46,6 +50,7 @@ PARAMS = {
     "EQUAL": ({"member_ids": IDS}, ["member_ids"]),
     "EXCLUDE": ({"member_ids": IDS}, ["member_ids"]),
     "FULL": ({"member_id": INT}, ["member_id"]),
+    "PAID": ({"member_ids": IDS}, ["member_ids"]),
     "WEIGHTED": ({"weights": _pairs("weight")}, ["weights"]),
     "QUANTITY": ({"quantities": _pairs("quantity")}, ["quantities"]),
 }
@@ -101,9 +106,12 @@ SYSTEM_PROMPT = """너는 정산 앱의 '분담 조건 해석기'다. 사용자�
   - EQUAL: 지정한 사람끼리만 똑같이 → params.member_ids
   - EXCLUDE: 전체 구성원에서 몇 명을 빼고 똑같이 → params.member_ids (빠지는 사람)
   - FULL: 한 명이 전부 → params.member_id
+  - PAID: 몇 명이 그 항목의 자기 몫을 결제한 사람에게 이미 보냈다 → params.member_ids (이미 보낸 사람). 금액은 계산하지 않는다
   - WEIGHTED: 비율로 나눔 → params.weights = [{member_id, weight}]
   - QUANTITY: 각자 먹은 수량 → params.quantities = [{member_id, quantity}], 수량 합이 항목 quantity와 같아야 한다
 - 항목 · 사람 · 비율 · 수량 중 하나라도 문장만으로 정할 수 없으면 status="NEEDS_CLARIFICATION", proposals=[], clarification에 짧은 질문과 missing을 넣는다.
+  질문은 빠진 것을 묻고, 답해 주면 무엇을 할지 덧붙인다. 예: "아침밥 메뉴가 무엇인가요? 알려 주시면 수아를 그 메뉴에서 뺄게요."
+- 문장이 여러 개면 (앞의 질문에 이어서 답한 경우 포함) 모두 합쳐서 한 번에 해석한다.
 - 정산과 관계없는 문장이면 status="UNSUPPORTED", proposals=[].
 - 문장에 없는 사람 · 항목 · 숫자를 만들지 않는다.
 - PARSED일 때 clarification은 null이다. evidence에는 근거가 된 문장 부분을 넣는다.
@@ -113,12 +121,16 @@ SYSTEM_PROMPT = """너는 정산 앱의 '분담 조건 해석기'다. 사용자�
 - "~만", "~끼리", "~둘이서/셋이서" → 말한 사람들만 낸다 → EQUAL (member_ids = 말한 사람들)
 - "~빼고", "~는 안 먹었어/안 마셨어" → 말한 사람을 뺀다 → EXCLUDE (member_ids = 빠지는 사람들)
 - "~가 전부/다 낼게" → FULL
+- "~는 (항목) 보냈어/줬어/입금했어" → 이미 돈을 보낸 사람 → PAID (member_ids = 보낸 사람들)
+- 데이터에 없는 말(예: "아침")로 항목을 가리켜서 어떤 항목인지 정할 수 없으면 NEEDS_CLARIFICATION
 - "1:1:2", "두 배" 처럼 비율 숫자 → WEIGHTED
 - "~인분", "~개" 처럼 각자 먹은 수량 → QUANTITY. 일부 사람의 수량만 나와서 합이 항목 quantity와 맞지 않으면 NEEDS_CLARIFICATION
 
 예시 (데이터에 '커피'(id 900, quantity 1)가 있을 때):
 문장: 커피는 A만 마셨어
 답: {"status":"PARSED","proposals":[{"receipt_item_id":900,"type":"FULL","params":{"member_id":1},"evidence":"커피는 A만 마셨어"}],"clarification":null}
+문장: B랑 C는 커피값 보냈어
+답: {"status":"PARSED","proposals":[{"receipt_item_id":900,"type":"PAID","params":{"member_ids":[2,3]},"evidence":"B랑 C는 커피값 보냈어"}],"clarification":null}
 """
 
 
@@ -133,6 +145,7 @@ class Item:
     receipt_id: int
     store_name: str
     member_ids: list[int]  # 지금 체크된 사람 (구성원 순서)
+    payer_id: int = 0  # 이 품목이 있는 영수증의 결제자
 
 
 @dataclass
@@ -187,21 +200,29 @@ def _call_stub(room: RoomData, text: str) -> str:
     """모델 없이 화면 · 테스트를 만들 때 쓰는 간단한 흉내. 실제 시연은 llama로 한다."""
     who = [i for i, n in room.members if n in text]
     what = [it for it in room.items if it.name in text]
-    clarify = {"status": "NEEDS_CLARIFICATION", "proposals": [],
-               "clarification": {"question": "어떤 품목을 누가 내는지 알려 주세요.", "missing": ["item", "member"]}}
-    if not who or len(what) != 1:
-        return json.dumps(clarify, ensure_ascii=False)
-    item = what[0].id
-    if any(k in text for k in ("전부", "다 낼", "다 내", "쏠게", "쏜다")) and len(who) == 1:
-        p = {"receipt_item_id": item, "type": "FULL", "params": {"member_id": who[0]}}
-    elif any(k in text for k in ("빼고", "안 먹", "안 마", "안먹", "안마")):
-        p = {"receipt_item_id": item, "type": "EXCLUDE", "params": {"member_ids": who}}
-    elif any(k in text for k in ("만", "끼리")):
-        p = {"receipt_item_id": item, "type": "EQUAL", "params": {"member_ids": who}}
+    has = lambda *keys: any(k in text for k in keys)  # noqa: E731
+    if who and not what:
+        names = ", ".join(room.names[i] for i in who)
+        question = (f"어떤 메뉴인가요? 알려 주시면 {_josa(names, '을', '를')} 그 메뉴에서 뺄게요."
+                    if has("안 먹", "안 마", "안먹", "안마", "빼") else "어떤 품목인지 알려 주세요.")
+        return json.dumps({"status": "NEEDS_CLARIFICATION", "proposals": [],
+                           "clarification": {"question": question, "missing": ["item"]}}, ensure_ascii=False)
+    if not who or not what:
+        return json.dumps({"status": "NEEDS_CLARIFICATION", "proposals": [],
+                           "clarification": {"question": "어떤 품목을 누가 내는지 알려 주세요.",
+                                             "missing": ["item", "member"]}}, ensure_ascii=False)
+    if has("보냈", "줬", "입금", "송금"):
+        rule = ("PAID", {"member_ids": [i for i in who if all(i != it.payer_id for it in what)] or who})
+    elif has("전부", "다 낼", "다 내", "쏠게", "쏜다") and len(who) == 1:
+        rule = ("FULL", {"member_id": who[0]})
+    elif has("빼고", "안 먹", "안 마", "안먹", "안마"):
+        rule = ("EXCLUDE", {"member_ids": who})
+    elif has("만", "끼리"):
+        rule = ("EQUAL", {"member_ids": who})
     else:
-        return json.dumps(clarify, ensure_ascii=False)
-    p["evidence"] = text
-    return json.dumps({"status": "PARSED", "proposals": [p], "clarification": None}, ensure_ascii=False)
+        return json.dumps({"status": "NEEDS_CLARIFICATION", "proposals": [], "clarification": None})
+    proposals = [{"receipt_item_id": it.id, "type": rule[0], "params": rule[1], "evidence": text} for it in what]
+    return json.dumps({"status": "PARSED", "proposals": proposals, "clarification": None}, ensure_ascii=False)
 
 
 def call_model(room: RoomData, text: str) -> str:
@@ -278,9 +299,40 @@ def validate(raw: str, text: str, room: RoomData) -> Checked:
 
 # ------------------------------------------------------------------ 규칙 → 체크 표 변경안
 
+RULE_NOTE = {"EXCLUDE": "빼기", "FULL": "한 명이 다 내기", "EQUAL": "~끼리만", "PAID": "이미 보낸 돈 빼기"}
+
+
+def _josa(name: str, with_batchim: str, without: str) -> str:
+    """이름 끝 글자에 받침이 있으면 with_batchim(을 · 은 · 이), 없으면 without(를 · 는 · 가)."""
+    last = name[-1] if name else ""
+    has = "가" <= last <= "힣" and (ord(last) - 0xAC00) % 28 != 0
+    return name + (with_batchim if has else without)
+
+
+def _paid_change(it: Item, paid_ids: list[int], room: RoomData) -> tuple[dict | None, str | None]:
+    """이미 보낸 사람 몫을 빼고 남은 금액 · 체크를 계산한다. (변경안, 막힌 이유)"""
+    from .engine import Member, split_equal
+
+    order = {i: n for n, (i, _) in enumerate(room.members)}
+    before = list(it.member_ids)
+    done = set(paid_ids) | {it.payer_id}  # 결제한 사람은 자기 몫을 이미 낸 셈이다
+    left = [m for m in before if m not in done]
+    if not left:
+        return None, f"'{it.name}'은(는) 체크된 사람이 모두 이미 냈어요. 바꿀 것이 없습니다."
+    shares = split_equal(it.amount, [Member(m, room.names[m], order[m]) for m in before])
+    after_amount = sum(shares[m] for m in left)
+    sent = [m for m in before if m in done and m != it.payer_id]
+    sent_names = ", ".join(room.names[m] for m in sent)
+    left_names = ", ".join(room.names[m] for m in left)
+    payer = room.names.get(it.payer_id, "결제자")
+    note = (f"{_josa(sent_names, '은', '는')} 이미 {payer}에게 보냈으니, "
+            if sent else f"{_josa(payer, '이', '가')} 결제했으니, ")
+    note += f"{it.name} {it.amount:,}원 중 {left_names} 몫 {after_amount:,}원만 남기고 {left_names}만 체크할게요."
+    return {"before_amount": it.amount, "after_amount": after_amount, "after_member_ids": left, "note": note}, None
+
 
 def to_changes(checked: Checked, room: RoomData) -> tuple[str, str, list[dict]]:
-    """검사를 통과한 규칙을 '품목마다 누가 내는지' 변경안으로 바꾼다. (status, message, changes)"""
+    """검사를 통과한 규칙을 '품목마다 누가 내는지(+ 금액)' 변경안으로 바꾼다. (status, message, changes)"""
     if checked.status != "PARSED":
         return checked.status, checked.message, []
     order = {i: n for n, (i, _) in enumerate(room.members)}
@@ -289,7 +341,14 @@ def to_changes(checked: Checked, room: RoomData) -> tuple[str, str, list[dict]]:
     for p in checked.proposals:
         it, t, prm = items[p["receipt_item_id"]], p["type"], p["params"]
         before = list(it.member_ids)
-        if t == "FULL":
+        extra: dict[str, Any] = {"before_amount": it.amount, "after_amount": it.amount, "note": None}
+        if t == "PAID":
+            paid, blocked = _paid_change(it, list(prm["member_ids"]), room)
+            if blocked:
+                return "PARSED", blocked, []
+            after = paid.pop("after_member_ids")
+            extra = paid
+        elif t == "FULL":
             after = [prm["member_id"]]
         elif t == "EQUAL":
             after = list(prm["member_ids"])
@@ -298,20 +357,22 @@ def to_changes(checked: Checked, room: RoomData) -> tuple[str, str, list[dict]]:
         after = sorted(set(after), key=order.__getitem__)
         if not after:
             return "NEEDS_CLARIFICATION", f"'{it.name}'을(를) 낼 사람이 아무도 남지 않아요. 누가 내는지 알려 주세요.", []
-        if after == before:
+        if after == before and extra["after_amount"] == it.amount:
             continue
         changes.append({"item_id": it.id, "receipt_id": it.receipt_id, "store_name": it.store_name,
                         "name": it.name, "rule": t, "evidence": p.get("evidence"),
-                        "before_member_ids": before, "after_member_ids": after})
+                        "before_member_ids": before, "after_member_ids": after, **extra})
     if not changes:
         return "PARSED", "이미 체크 표에 그렇게 되어 있어요. 바꿀 것이 없습니다.", []
-    return "PARSED", "체크 표를 이렇게 바꿀까요?", changes
+    return "PARSED", "이렇게 바꿀까요?", changes
 
 
-def interpret(room: RoomData, text: str) -> dict[str, Any]:
+def interpret(room: RoomData, text: str, previous: str | None = None) -> dict[str, Any]:
+    """previous가 있으면 앞 문장(되물은 질문 전에 한 말)에 이어서 답한 것으로 보고 합쳐서 해석한다."""
+    full = f"{previous.strip()} {text.strip()}" if previous and previous.strip() else text.strip()
     start = time.perf_counter()
-    raw = call_model(room, text)
+    raw = call_model(room, full)
     elapsed_ms = int((time.perf_counter() - start) * 1000)
-    status, message, changes = to_changes(validate(raw, text, room), room)
-    return {"status": status, "message": message, "changes": changes,
+    status, message, changes = to_changes(validate(raw, full, room), room)
+    return {"status": status, "message": message, "changes": changes, "text": full,
             "provider": settings.nl_provider, "elapsed_ms": elapsed_ms}

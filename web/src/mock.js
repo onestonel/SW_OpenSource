@@ -52,25 +52,37 @@ function checksOut(r) {
 }
 
 // 문장 해석 흉내 (서버 NL_PROVIDER=stub과 같은 규칙). 실제 해석은 서버의 llama.cpp가 한다
-function interpretStub(r, text) {
+function interpretStub(r, said, previous) {
+  const text = previous ? `${previous} ${said}` : said
   const { members, items } = checksOut(r)
   if (!items.length) fail(409, 'NO_CHECK_ITEMS', '확정된 영수증이 없어서 바꿀 품목이 없습니다. 영수증을 먼저 확정해 주세요.')
   const who = members.filter((m) => text.includes(m.name)).map((m) => m.id)
   const what = items.filter((it) => text.includes(it.name))
-  const ask = { status: 'NEEDS_CLARIFICATION', message: '어떤 품목을 누가 내는지 알려 주세요.', changes: [], provider: 'stub', elapsed_ms: 0 }
-  if (!who.length || what.length !== 1) return ask
-  const it = what[0]
   const has = (...keys) => keys.some((k) => text.includes(k))
-  let rule, after
-  if (has('전부', '다 낼', '다 내') && who.length === 1) [rule, after] = ['FULL', who]
-  else if (has('빼고', '안 먹', '안 마')) [rule, after] = ['EXCLUDE', it.member_ids.filter((m) => !who.includes(m))]
-  else if (has('만', '끼리')) [rule, after] = ['EQUAL', who]
-  else return ask
-  after = members.map((m) => m.id).filter((id) => after.includes(id))
-  if (!after.length) return { ...ask, message: `'${it.name}'을(를) 낼 사람이 아무도 남지 않아요. 누가 내는지 알려 주세요.` }
-  const change = { item_id: it.item_id, receipt_id: it.receipt_id, store_name: it.store_name, name: it.name, rule, evidence: text,
-    before_member_ids: it.member_ids, after_member_ids: after }
-  return { status: 'PARSED', message: '체크 표를 이렇게 바꿀까요?', changes: [change], provider: 'stub', elapsed_ms: 0 }
+  const out = (status, message, changes = []) => ({ status, message, changes, text, provider: 'stub', elapsed_ms: 0 })
+  if (who.length && !what.length) return out('NEEDS_CLARIFICATION', has('안 먹', '안 마', '빼') ? '어떤 메뉴인가요? 알려 주시면 그 메뉴에서 뺄게요.' : '어떤 품목인지 알려 주세요.')
+  if (!who.length || !what.length) return out('NEEDS_CLARIFICATION', '어떤 품목을 누가 내는지 알려 주세요.')
+  const order = (ids) => members.map((m) => m.id).filter((id) => ids.includes(id))
+  const payerOf = Object.fromEntries(r.receipts.map((rc) => [rc.id, rc.payer_member_id]))
+  const changes = []
+  for (const it of what) {
+    let after = null
+    let amount = it.amount
+    if (has('보냈', '줬', '입금')) {
+      const done = new Set([...who, payerOf[it.receipt_id]])
+      after = it.member_ids.filter((m) => !done.has(m))
+      amount = Math.floor((it.amount * after.length) / it.member_ids.length)
+    } else if (has('전부', '다 낼', '다 내') && who.length === 1) after = who
+    else if (has('빼고', '안 먹', '안 마')) after = it.member_ids.filter((m) => !who.includes(m))
+    else if (has('만', '끼리')) after = who
+    else return out('NEEDS_CLARIFICATION', '어떤 품목을 누가 내는지 알려 주세요.')
+    if (!after.length) return out('NEEDS_CLARIFICATION', `'${it.name}'을(를) 낼 사람이 아무도 남지 않아요.`)
+    changes.push({ item_id: it.item_id, receipt_id: it.receipt_id, store_name: it.store_name, name: it.name,
+      rule: has('보냈', '줬', '입금') ? 'PAID' : has('빼고', '안 먹', '안 마') ? 'EXCLUDE' : who.length === 1 && has('전부', '다 낼', '다 내') ? 'FULL' : 'EQUAL',
+      evidence: text, before_member_ids: it.member_ids, after_member_ids: order(after),
+      before_amount: it.amount, after_amount: amount, note: null })
+  }
+  return out('PARSED', '이렇게 바꿀까요?', changes)
 }
 
 // 서버 검사 5개 (api-v1.md 3장)
@@ -209,7 +221,23 @@ const routes = [
     r.stale = true
     return checksOut(r)
   }],
-  ['POST', /^\/rooms\/([^/]+)\/checks\/interpret$/, (_db, [r], body) => interpretStub(r, body.text ?? '')],
+  ['POST', /^\/rooms\/([^/]+)\/checks\/interpret$/, (_db, [r], body) => interpretStub(r, body.text ?? '', body.previous)],
+  ['POST', /^\/rooms\/([^/]+)\/checks\/apply$/, (_db, [r], body) => {
+    if (body.changes.some((c) => !c.member_ids.length)) fail(422, 'CHECK_EMPTY', '아무도 체크하지 않은 품목이 있어요. 품목마다 1명 이상 체크해주세요.')
+    for (const { item_id, member_ids, amount } of body.changes) {
+      for (const rc of r.receipts) {
+        const it = rc.items.find((x) => x.id === item_id)
+        if (!it) continue
+        if (amount != null && amount < it.amount) {
+          rc.total_amount -= it.amount - amount
+          it.amount = amount
+        }
+        it.member_ids = member_ids
+      }
+    }
+    r.stale = true
+    return checksOut(r)
+  }],
   ['POST', /^\/rooms\/([^/]+)\/settlements$/, (_db, [r]) => settle(r)],
   ['GET', /^\/rooms\/([^/]+)\/settlements\/latest$/, (_db, [r]) => {
     const s = r.settlements.at(-1)

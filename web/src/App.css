@@ -364,3 +364,10 @@
 .say-change { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: rgba(28, 28, 30, 0.04); }
 .check-grid--flash { animation: check-flash 2.5s ease-out; }
 @keyframes check-flash { from { background: rgba(255, 196, 0, 0.35); } to { background: transparent; } }
+.chat { display: flex; flex-direction: column; gap: 8px; }
+.bubble { max-width: 88%; padding: 10px 14px; border-radius: 16px; font-size: 15px; line-height: 1.5; }
+.bubble--me { align-self: flex-end; background: var(--primary, #2563eb); color: #fff; border-bottom-right-radius: 4px; }
+.bubble--ai { align-self: flex-start; background: rgba(28, 28, 30, 0.05); border-bottom-left-radius: 4px; }
+.bubble--ai .say-change { background: rgba(255, 255, 255, 0.8); }
+.say-apply { height: 44px; border-radius: 22px; font-size: 15px; }
+.transfer-why { flex-basis: 100%; margin-top: 4px; font-size: 13px; line-height: 1.5; color: var(--text-sub); }

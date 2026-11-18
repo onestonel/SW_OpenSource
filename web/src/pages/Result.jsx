@@ -93,7 +93,10 @@ export default function Result() {
             <ul className="glass transfer-list">
               {s.transfers.length === 0 && <li className="muted-14">보낼 돈이 없어요.</li>}
               {s.transfers.map((tr) => (
-                <li key={`${tr.from.id}-${tr.to.id}`}><span>{tr.from.name} → {tr.to.name}</span><span>{won(tr.amount)}원</span></li>
+                <li key={`${tr.from.id}-${tr.to.id}`} style={tr.explanation ? { flexWrap: 'wrap' } : undefined}>
+                  <span>{tr.from.name} → {tr.to.name}</span><span>{won(tr.amount)}원</span>
+                  {tr.explanation && <span className="transfer-why">{tr.explanation}</span>}
+                </li>
               ))}
             </ul>
             <p className="muted-13">

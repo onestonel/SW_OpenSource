@@ -177,6 +177,8 @@ class ChecksIn(In):
 
 class InterpretIn(In):
     text: str = Field(min_length=1, max_length=200, description="분담 조건 문장. 예: \"D는 술 안 마셨어\"")
+    previous: str | None = Field(default=None, max_length=400,
+                                 description="되묻기(NEEDS_CLARIFICATION)에 답할 때, 앞에서 보낸 문장 (답장의 text)")
 
 
 class InterpretChangeOut(Out):
@@ -184,18 +186,33 @@ class InterpretChangeOut(Out):
     receipt_id: int
     store_name: str
     name: str
-    rule: Literal["EQUAL", "EXCLUDE", "FULL"] = Field(description="EQUAL ~끼리만 · EXCLUDE ~빼고 · FULL ~가 다 냄")
+    rule: Literal["EQUAL", "EXCLUDE", "FULL", "PAID"] = Field(
+        description="EQUAL ~끼리만 · EXCLUDE ~빼고 · FULL ~가 다 냄 · PAID ~는 이미 보냄 (금액이 바뀜)")
     evidence: str | None = Field(description="해석기가 근거로 든 문장 부분")
     before_member_ids: list[int] = Field(description="지금 체크된 구성원 (구성원 순서)")
-    after_member_ids: list[int] = Field(description="바꾼 뒤 체크될 구성원. 적용하면 PUT /checks로 이 값을 보낸다")
+    after_member_ids: list[int] = Field(description="바꾼 뒤 체크될 구성원")
+    before_amount: int = Field(description="지금 품목 금액")
+    after_amount: int = Field(description="바꾼 뒤 품목 금액. PAID일 때만 달라진다 (서버가 계산)")
+    note: str | None = Field(description="PAID일 때 무엇을 어떻게 바꾸는지 설명하는 문장")
 
 
 class InterpretOut(Out):
     status: Literal["PARSED", "NEEDS_CLARIFICATION", "UNSUPPORTED"]
     message: str = Field(description="사용자에게 그대로 보여 줄 한국어 문장 (다시 묻기 질문 포함)")
+    text: str = Field(description="해석한 문장 전체 (previous + text). 되물으면 다음 요청의 previous로 보낸다")
     changes: list[InterpretChangeOut] = Field(description="PARSED일 때만 채워진다. 저장은 하지 않는다")
     provider: str = Field(description="stub(모델 없이 흉내) 또는 llama(llama.cpp · EXAONE)")
     elapsed_ms: int = Field(description="해석에 걸린 시간 (밀리초)")
+
+
+class ApplyLineIn(In):
+    item_id: int
+    member_ids: list[int] = Field(description="이 품목을 나눠 낼 구성원 id")
+    amount: int | None = Field(default=None, gt=0, description="바꿀 품목 금액 (PAID 변경안의 after_amount). 줄이기만 된다")
+
+
+class ApplyIn(In):
+    changes: list[ApplyLineIn] = Field(min_length=1)
 
 
 # ------------------------------------------------------------------ 정산 결과 (5단계)
@@ -208,12 +225,22 @@ class SettlementMemberOut(Out):
     net: int = Field(description="paid − owed. 양수면 받을 돈, 음수면 보낼 돈")
 
 
+class TransferLineOut(Out):
+    store_name: str
+    from_id: int
+    to_id: int
+    amount: int
+
+
 class TransferOut(Out):
     model_config = ConfigDict(populate_by_name=True)
 
     from_: PayerOut = Field(alias="from", description="보내는 사람")
     to: PayerOut = Field(description="받는 사람")
     amount: int
+    breakdown: list[TransferLineOut] = Field(default_factory=list,
+                                             description="합치기 전 두 사람 사이에 영수증별로 오간 돈 (양쪽 방향 모두)")
+    explanation: str | None = Field(default=None, description="서로 보낼 돈이 있어서 합쳐졌을 때, 어떻게 합쳤는지 설명")
 
 
 class ExcludedReceiptOut(Out):
