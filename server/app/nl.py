@@ -424,6 +424,16 @@ def _check_parsed(result: dict, text: str, room: RoomData, repairs: list[str]) -
     if not merged:
         return _clarify()
 
+    # "해장국이랑 김밥"처럼 문장에 품목 여러 개가 나왔는데 모델이 그중 일부에만 규칙을 냈고(11/19 실제 EXAONE),
+    # 낸 규칙이 모두 같은 하나라면, 문장에 이름이 나온 나머지 품목에도 같은 규칙을 적용한다
+    rules = {(p["type"], json.dumps(p["params"], sort_keys=True)) for p in merged.values()}
+    if len(rules) == 1 and next(iter(rules))[0] in CHECKABLE:
+        one = next(iter(merged.values()))
+        for it in room.items:
+            if it.name in text and it.id not in merged:
+                merged[it.id] = {**one, "receipt_item_id": it.id, "params": dict(one["params"])}
+                repairs.append("빠진 품목 추가")
+
     for item, p in merged.items():
         t, prm = p["type"], p["params"]
         if t not in CHECKABLE:

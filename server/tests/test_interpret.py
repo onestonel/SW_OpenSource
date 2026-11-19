@@ -609,3 +609,26 @@ def test_openai_schema_is_strict_compatible():
             for v in x:
                 check(v)
     check(s)
+
+
+def test_missing_named_item_gets_same_rule(api, room, monkeypatch):
+    """'수아는 아침 안 먹었어 해장국이랑 김밥'에서 모델이 해장국만 냈다(11/19 실제 EXAONE) → 김밥에도 같은 빼기."""
+    a, b, c, d = ids(room)
+    body = {"store_name": "해장국집", "payer_member_id": a, "total_amount": 43500,
+            "items": [{"name": "해장국", "amount": 34000}, {"name": "김밥", "amount": 9500}]}
+    r = api.post(f"/rooms/{room['room_token']}/receipts", body).json()
+    api.post(f"/rooms/{room['room_token']}/receipts/{r['id']}/confirm", expect=200)
+    soup = next(i["id"] for i in r["items"] if i["name"] == "해장국")
+    model_says(monkeypatch, parsed({"receipt_item_id": soup, "type": "EXCLUDE", "params": {"member_ids": [d]}}))
+    got = api.post(f"/rooms/{room['room_token']}/checks/interpret",
+                   {"text": "해장국이랑 김밥", "previous": "수아는 아침 안 먹었어"}, expect=200).json()
+    assert [(ch["name"], ch["after_member_ids"]) for ch in got["changes"]] == [("해장국", [a, b, c]), ("김밥", [a, b, c])]
+
+
+def test_different_rules_do_not_spread(api, room, receipt, monkeypatch):
+    """규칙이 서로 다르면 문장에 나온 다른 품목으로 퍼뜨리지 않는다."""
+    a, b, c, d = ids(room)
+    model_says(monkeypatch, parsed({"receipt_item_id": item_id(receipt, "소주"), "type": "EXCLUDE", "params": {"member_ids": [d]}},
+                                   {"receipt_item_id": item_id(receipt, "삼겹살"), "type": "FULL", "params": {"member_id": a}}))
+    got = ask(api, room, "수아는 소주 안 마셨고 삼겹살은 민수가 다 낼게").json()
+    assert sorted(ch["name"] for ch in got["changes"]) == ["삼겹살", "소주"]
