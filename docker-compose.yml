@@ -43,6 +43,8 @@ services:
       RECEIPT_STORAGE_PATH: /data/receipts
       NL_PROVIDER: ${NL_PROVIDER:-stub}
       NL_BASE_URL: http://llm:8080/v1
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-} # 있으면 작은 모델이 못 알아들을 때만 GPT에 다시 묻는다 (.env에만, 커밋 금지)
+      NL_FALLBACK_MODEL: ${NL_FALLBACK_MODEL:-gpt-4.1-mini}
       TZ: Asia/Seoul
       WATCHFILES_FORCE_POLLING: "true" # Windows에서 파일을 고쳐도 자동 재시작되게
     ports:
@@ -67,6 +69,7 @@ services:
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3000"
     environment:
       VITE_API_BASE_URL: http://localhost:8000/api/v1
+      VITE_USE_MOCK: ${VITE_USE_MOCK:-false} # 서버 API가 다 들어와서 기본은 진짜 서버. 목 데이터로 보려면 .env에 true
       CHOKIDAR_USEPOLLING: "true" # Windows에서 파일을 고쳐도 화면이 바로 바뀌게
       TZ: Asia/Seoul
     ports:
@@ -87,7 +90,22 @@ services:
     environment:
       LLAMA_CACHE: /models
     ports:
-      - "8080:8080"
+      - "8081:8080" # 내 컴퓨터에서는 8081 (8080은 Airflow 등과 자주 겹침). 서버는 컨테이너 안에서 llm:8080으로 부른다
+    volumes:
+      - llm_models:/models
+
+  # ── 비교용 두 번째 LLM (필요할 때만: docker compose --profile compare up -d llm2) ──
+  # 기본은 Gemma 4 E4B. 다른 모델은 .env의 LLM2_MODEL로 바꾼다. 비교: scripts/compare_llm.py
+  llm2:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    profiles: ["compare"]
+    command: >
+      -hf ${LLM2_MODEL:-ggml-org/gemma-4-E4B-it-GGUF:Q4_0}
+      --jinja -c 8192 --host 0.0.0.0 --port 8080
+    environment:
+      LLAMA_CACHE: /models
+    ports:
+      - "8082:8080"
     volumes:
       - llm_models:/models
 
