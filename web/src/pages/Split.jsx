@@ -124,7 +124,8 @@ function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
   )
 }
 
-const RULE_LABEL = { EXCLUDE: '빼기', FULL: '한 명이 다 내기', EQUAL: '~끼리만', PAID: '이미 보낸 돈 빼기' }
+// 사용자가 보는 대화창은 한국어. 기록 화면 · 슬라이드 · JSON은 영어 코드(EQUAL · EXCLUDE · FULL · PAID)
+const RULE_LABEL = { EXCLUDE: '제외', FULL: '전액 부담', EQUAL: '일부만 부담', PAID: '송금 완료' }
 
 // AI 총무: 말하면 체크 표 변경안을 보여 주고, 반영하면 서버에 바로 저장한다.
 // AI가 되물으면(NEEDS_CLARIFICATION) 다음 말은 앞 문장에 이어서 해석한다.

@@ -19,8 +19,7 @@ from app.db import make_engine  # noqa: E402
 from app.models import NlLog  # noqa: E402
 from app.nl_report import summarize  # noqa: E402
 
-LABEL = {"EQUAL": "끼리만", "EXCLUDE": "빼기", "FULL": "다 내기", "PAID": "이미 보냄", "WEIGHTED": "비율",
-         "QUANTITY": "수량", "NEEDS_CLARIFICATION": "되묻기", "UNSUPPORTED": "지원 안 함", "(없음)": "(없음)"}
+LABEL = {"NEEDS_CLARIFICATION": "ASK"}  # 나머지는 영어 코드 그대로 (EQUAL · EXCLUDE · FULL · PAID …)
 
 
 def pct(x: float | None) -> str:

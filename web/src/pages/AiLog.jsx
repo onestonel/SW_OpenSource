@@ -3,10 +3,8 @@ import { api, providerLabel } from '../api.js'
 import { useLoad } from '../hooks.js'
 import { BackLink, Loading, Page } from '../ui.jsx'
 
-const LABEL = {
-  EQUAL: '끼리만', EXCLUDE: '빼기', FULL: '다 내기', PAID: '이미 보냄', WEIGHTED: '비율', QUANTITY: '수량',
-  NEEDS_CLARIFICATION: '되묻기', UNSUPPORTED: '지원 안 함', PARSED: '변경안', '(없음)': '(없음)',
-}
+// 기록 화면은 기술 화면이라 JSON과 같은 영어 코드로 보여 준다 (대화창은 한국어)
+const LABEL = { NEEDS_CLARIFICATION: 'ASK', PARSED: 'PARSED', '(없음)': '(없음)' }
 const OUTCOME = { APPLIED: '반영', MOVED_ON: '반영 안 함', ANSWERED: '답함', '결과 없음': '아직' }
 const pct = (x) => (x == null ? '-' : `${Math.round(x * 100)}%`)
 const label = (k) => LABEL[k] ?? k
@@ -33,13 +31,13 @@ export default function AiLog() {
         <div className="glass card-pad"><span className="muted-13">반영 비율</span><b>{pct(s.apply_rate)}</b><span className="muted-13">{s.applied}/{s.proposals}</span></div>
         <div className="glass card-pad"><span className="muted-13">반영 뒤 손으로 고침</span><b>{pct(s.fix_rate)}</b><span className="muted-13">{s.fixed_after_apply}/{s.applied}</span></div>
         <div className="glass card-pad"><span className="muted-13">GPT로 넘김</span><b>{s.escalated}</b><span className="muted-13">작은 모델이 못 알아들은 말</span></div>
-        <div className="glass card-pad"><span className="muted-13">서버가 고친 답</span><b>{s.repaired_entries}</b><span className="muted-13">{Object.entries(s.repairs).map(([k, v]) => `${k.replace('EXCLUDE', '빼기').replace('EQUAL', '끼리만')} ${v}`).join(', ') || '없음'}</span></div>
+        <div className="glass card-pad"><span className="muted-13">서버가 고친 답</span><b>{s.repaired_entries}</b><span className="muted-13">{Object.entries(s.repairs).map(([k, v]) => `${k} ${v}`).join(', ') || '없음'}</span></div>
       </section>
 
       {m.rows.length > 0 && (
         <section className="stack-6" style={{ gap: 8 }}>
           <h2 className="subtitle" style={{ fontSize: 16 }}>규칙 표</h2>
-          <p className="muted-13">행은 모델이 고른 규칙, 열은 서버가 고친 뒤 규칙이에요. 대각선 밖의 숫자가 서버가 바로잡은 횟수예요.</p>
+          <p className="muted-13">행은 모델이 고른 규칙, 열은 서버가 고친 뒤 규칙이에요. 대각선 밖의 숫자가 서버가 바로잡은 횟수예요. EQUAL 일부만 부담 · EXCLUDE 제외 · FULL 전액 부담 · PAID 송금 완료 · ASK 추가 질문</p>
           <div className="glass card-pad" style={{ overflowX: 'auto' }}>
             <table className="ailog-matrix">
               <thead><tr><th>모델 \ 최종</th>{m.cols.map((c) => <th key={c}>{label(c)}</th>)}</tr></thead>
