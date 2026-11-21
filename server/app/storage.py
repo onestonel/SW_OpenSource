@@ -37,3 +37,12 @@ def photo_path(name: str) -> Path | None:
         return None
     path = storage_dir() / name
     return path if path.is_file() else None
+
+
+def delete_photo(name: str | None) -> None:
+    """저장된 사진을 지운다. 이름이 None이거나 형식이 틀리거나 파일이 없으면 아무것도 하지 않는다."""
+    if name is None:
+        return
+    path = photo_path(name)
+    if path is not None:
+        path.unlink(missing_ok=True)
