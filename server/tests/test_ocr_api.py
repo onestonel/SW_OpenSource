@@ -1,4 +1,4 @@
-"""영수증 자동 인식 API: 올린 사진 이름으로 초안을 받는다 (stub 엔진이라 OCR 설치 없이 돈다)."""
+"""영수증 자동 인식 API: 영수증에 올린 사진으로 초안을 받는다 (stub 엔진이라 OCR 설치 없이 돈다)."""
 
 from __future__ import annotations
 
@@ -17,12 +17,23 @@ def tmp_storage(tmp_path, monkeypatch):
     return tmp_path
 
 
-def upload(client) -> str:
-    return client.post("/api/v1/receipt-photos", files={"file": ("r.png", PNG, "image/png")}).json()["photo_url"]
+def make_receipt(api) -> str:
+    """정산방 · 영수증을 만들고 그 영수증의 사진 주소를 돌려준다."""
+    room = api.post("/rooms", {"name": "제주 여행", "members": ["A", "B"]}).json()
+    body = {"store_name": "1차 식당", "payer_member_id": room["members"][0]["id"], "total_amount": 10000,
+            "items": [{"name": "김치찌개", "amount": 10000}]}
+    receipt = api.post(f"/rooms/{room['room_token']}/receipts", body).json()
+    return f"/api/v1/rooms/{room['room_token']}/receipts/{receipt['id']}/photo"
 
 
-def test_recognize_uploaded_photo(client):
-    res = client.post(upload(client) + "/ocr", params={"engine": "stub"})
+def upload(client, api) -> str:
+    url = make_receipt(api)
+    assert client.post(url, files={"file": ("r.png", PNG, "image/png")}).status_code == 200
+    return url
+
+
+def test_recognize_uploaded_photo(client, api):
+    res = client.post(upload(client, api) + "/ocr", params={"engine": "stub"})
     assert res.status_code == 200
     body = res.json()
     assert body["draft"]["store_name"] == "같이고기 경기대점"
@@ -33,17 +44,17 @@ def test_recognize_uploaded_photo(client):
     assert {ln["role"] for ln in body["lines"]} >= {"store", "item", "discount", "total", "ignored"}
 
 
-def test_missing_photo(client):
-    res = client.post("/api/v1/receipt-photos/" + "0" * 32 + ".png/ocr")
+def test_missing_photo(client, api):
+    res = client.post(make_receipt(api) + "/ocr")  # 사진을 아직 안 올림
     assert res.status_code == 404
     assert res.json()["error"]["code"] == "NOT_FOUND"
 
 
-def test_engine_unavailable(client, monkeypatch):
+def test_engine_unavailable(client, api, monkeypatch):
     def broken(name):
         raise EngineUnavailable("tesseract 프로그램을 찾을 수 없습니다")
 
     monkeypatch.setattr(ocr_api, "get_engine", broken)
-    res = client.post(upload(client) + "/ocr", params={"engine": "tesseract"})
+    res = client.post(upload(client, api) + "/ocr", params={"engine": "tesseract"})
     assert res.status_code == 503
     assert res.json()["error"]["code"] == "OCR_UNAVAILABLE"

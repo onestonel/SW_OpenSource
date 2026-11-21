@@ -1,6 +1,6 @@
 """영수증 자동 인식 API (V2 프로토타입).
 
-저장된 사진 이름으로 OCR을 돌려 '영수증 만들기'에 넣을 초안을 돌려준다.
+영수증에 올린 사진으로 OCR을 돌려 '영수증 만들기'에 넣을 초안을 돌려준다.
 V2에서는 사진을 올리면 RabbitMQ에 작업이 들어가고 Worker가 같은 run_ocr를 부르게 된다.
 지금은 바로 확인할 수 있게 요청 안에서 기다렸다가 답한다.
 """
@@ -18,8 +18,9 @@ from ...core.errors import AppError
 from ...ocr import run_ocr
 from ...ocr.engines import EngineUnavailable, get_engine
 from ...ocr.preprocess import ImageUnreadable
+from .receipts import CurrentReceipt
 
-router = APIRouter(tags=["receipt-ocr"])
+router = APIRouter(prefix="/rooms/{room_token}/receipts/{receipt_id}/photo/ocr", tags=["receipt-ocr"])
 
 
 class DraftItemOut(BaseModel):
@@ -58,16 +59,16 @@ class OcrOut(BaseModel):
 
 
 @router.post(
-    "/receipt-photos/{name}/ocr",
+    "",
     response_model=OcrOut,
     summary="영수증 사진 자동 인식 (V2 프로토타입)",
     description="올린 사진을 읽어 가게 이름 · 합계 · 품목 초안을 돌려줍니다. lines는 줄마다 어떻게 판단했는지 보여 줍니다.",
 )
 def recognize_photo(
-    name: str,
+    receipt: CurrentReceipt,
     engine: Literal["stub", "tesseract", "easyocr"] | None = Query(None, description="비우면 OCR_ENGINE 설정을 씁니다"),
 ) -> OcrOut:
-    path = storage.photo_path(name)
+    path = storage.photo_path(receipt.photo_path) if receipt.photo_path else None
     if path is None:
         raise AppError(404, "NOT_FOUND", "사진을 찾을 수 없습니다.")
     try:
