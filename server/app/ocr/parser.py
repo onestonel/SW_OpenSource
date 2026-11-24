@@ -88,6 +88,8 @@ class ParseRules:
     # 합계 낱말이 있어도 금액이 아닌 줄 (합계수량 12 → 12원이 아님)
     total_exclude_keywords: tuple[str, ...] = ("수량", "건수", "개수")
     discount_keywords: tuple[str, ...] = ("할인", "DC", "쿠폰", "에누리")
+    # 금액 뒤에 찍는 과세 표시 ('32,990 T' '27,980T'). 줄 끝 금액 자리에서만 뗀다. 창고형 마트 형식 (4회차)
+    tax_marks: tuple[str, ...] = ("T",)
     # 숫자 자리에 자주 섞여 들어오는 비슷한 글자 (OCR이 0을 O로 읽는 등). 숫자가 반 이상인 낱말에만 쓴다
     digit_fixes: dict[str, str] = field(
         default_factory=lambda: {
@@ -170,13 +172,17 @@ class ParsedReceipt:
 _NUM = re.compile(r"[-−–]?(?:\d{1,3}(?:[,.]\d{3})+|\d+)")
 _LETTER = re.compile(r"[가-힣A-Za-z]")
 _TIMES = re.compile(r"(\d)\s*[xX×*]\s*(\d)")
+# 쉼표 뒤에 띄어쓰기가 끼어 읽힌 천 단위 ('9, 790' → '9,790'). 머리줄이 있으면 표 읽기가 잇지만, 없는 영수증도 있다
+_SPACED_THOUSANDS = re.compile(r"(?<=\d),\s+(?=\d{3}(?!\d))")
 _SKIP_TOKENS = {"x", "X", "×", "*", "@", "=", "|"}
 _NAME_STRIP = " :：·-=|[]【】<>'\"`ㆍ、.,*_"  # 괄호 ()는 '탕수육(소)'처럼 이름의 일부라 남긴다
 _INDEX = re.compile(r"^\d{1,3}[*._,)\]]*\s+")  # 이름 앞의 순번 '01 ' '08*. ' '12__ '
+# 이름 앞의 상품코드 '689637 프라이드치킨' (창고형 마트 형식). 4자리 이하는 '2080 치약' 같은 상표일 수 있어 남긴다
+_CODE = re.compile(r"^\d{5,}\s+")
 
 
 def _clean_name(name: str) -> str:
-    return _INDEX.sub("", name.strip(_NAME_STRIP)).strip(_NAME_STRIP)
+    return _CODE.sub("", _INDEX.sub("", name.strip(_NAME_STRIP))).strip(_NAME_STRIP)
 
 
 def _compact(text: str) -> str:
@@ -197,6 +203,7 @@ def _has(text: str, keywords) -> bool:
 
 def _normalize(text: str) -> str:
     text = _TIMES.sub(r"\1 \2", text)  # '4,500x3' → '4,500 3'
+    text = _SPACED_THOUSANDS.sub(",", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -218,15 +225,41 @@ def _number(token: str, rules: ParseRules) -> int | None:
     return sign * int(re.sub(r"\D", "", t))
 
 
+def _strip_tax_mark(token: str, rules: ParseRules) -> str:
+    """금액 바로 뒤에 붙은 과세 표시를 뗀다 ('22,990T' → '22,990', '1,000-T' → '1,000-')."""
+    for mark in rules.tax_marks:
+        head = token.removesuffix(mark)
+        if head != token and head and (head[-1].isdigit() or head[-1] in "-−–"):
+            return head
+    return token
+
+
+_MINUS_AFTER = re.compile(r"^(\d[\d,.]*)[-−–]$")  # 금액 뒤에 붙은 빼기 '1,000-' (창고형 마트의 할인 표기)
+
+
+def _last_amount_token(text: str, rules: ParseRules) -> str:
+    """줄 끝의 금액 낱말 (뒤에 따로 찍힌 과세 표시는 건너뛰고, 붙은 것은 뗀다)."""
+    tokens = text.split()
+    while tokens and tokens[-1] in rules.tax_marks:
+        tokens.pop()
+    return _strip_tax_mark(tokens[-1], rules) if tokens else ""
+
+
+def _minus_after_amount(text: str, rules: ParseRules) -> bool:
+    return bool(_MINUS_AFTER.match(_last_amount_token(text, rules)))
+
+
 def _split(text: str, rules: ParseRules) -> tuple[str, list[int]]:
     """줄을 '이름 부분'과 '끝에 붙은 숫자들'로 나눈다. '김치찌개 9,000 2 18,000' → ('김치찌개', [9000, 2, 18000])"""
     tokens = _normalize(text).split()
     nums: list[int] = []
     while tokens:
         tok = tokens[-1]
-        if tok in _SKIP_TOKENS:
+        if tok in _SKIP_TOKENS or (not nums and tok in rules.tax_marks):
             tokens.pop()
             continue
+        if not nums:  # 줄 끝 금액 자리: 과세 표시를 떼고, 뒤에 붙은 빼기는 앞으로 ('1,000-T' → '-1,000')
+            tok = _MINUS_AFTER.sub(r"-\1", _strip_tax_mark(tok, rules))
         n = _number(tok, rules)
         if n is None:
             break
@@ -263,8 +296,16 @@ def _is_header(text: str, nums: list[int], rules: ParseRules) -> bool:
     return not nums and sum(kw in compact for kw in rules.header_keywords) >= 2
 
 
+def _priced(nums: list[int]) -> bool:
+    """끝의 세 숫자가 단가 × 수량 = 금액으로 맞는지 (순서는 어느 쪽이든)."""
+    return len(nums) >= 3 and nums[-3] * nums[-2] == abs(nums[-1])
+
+
 def _merge_two_line_items(lines: list[Line], rules: ParseRules) -> list[Line]:
-    """'이름만 있는 줄' 다음에 '숫자만 있는 줄'이 오면 한 줄로 합친다 (메뉴 이름을 따로 찍는 영수증)."""
+    """'이름만 있는 줄' 다음에 '숫자만 있는 줄'이 오면 한 줄로 합친다 (메뉴 이름을 따로 찍는 영수증).
+
+    이름 끝이 숫자로 읽힌 줄('칠성사이다 210ml 10')도 다음 줄이 단가 × 수량 = 금액으로 맞는 숫자 줄이면 합친다.
+    """
     out: list[Line] = []
     i = 0
     while i < len(lines):
@@ -274,7 +315,7 @@ def _merge_two_line_items(lines: list[Line], rules: ParseRules) -> list[Line]:
             next_name, next_nums = _split(lines[i + 1].text, rules)
             if (
                 name
-                and not nums
+                and (not nums or (len(nums) == 1 and _priced(next_nums)))
                 and next_nums
                 and not _LETTER.search(next_name)
                 and not _has(cur.text, rules.ignore_keywords)
@@ -495,7 +536,9 @@ def parse_receipt(lines: list[Line], rules: ParseRules | None = None) -> ParsedR
             total = split[total_idx][1][-1]
             break
     for i, ln in enumerate(lines):
-        if roles[i] == "other" and any(_has(ln.text, g) for g in rules.total_keywords):
+        # 금액이 없는 줄('상품수 소계:5')은 합계 낱말이 있어도 품목 구간을 끊지 않는다
+        has_amount = bool(split[i][1]) and abs(split[i][1][-1]) >= rules.min_amount
+        if roles[i] == "other" and has_amount and any(_has(ln.text, g) for g in rules.total_keywords):
             roles[i] = "total" if i == total_idx else "subtotal"
 
     # 품목: 머리줄 아래 ~ 첫 합계 줄 위. 할인은 합계 줄 사이에 오는 경우가 많아 결제금액 줄 위까지 본다
@@ -508,7 +551,9 @@ def parse_receipt(lines: list[Line], rules: ParseRules | None = None) -> ParsedR
         if roles[i] != "other" or not nums or not _LETTER.search(name):
             continue
         amount = nums[-1]
-        if _has(name, rules.discount_keywords):
+        # 할인 낱말 없이 금액 뒤에 빼기만 붙인 할인 ('단팥호빵 … 1,000-T'). 앞에 붙은 빼기만 있는 줄은 4회차 실험에서
+        # 다른 영수증의 소계 찾기를 깨뜨려서(보고서 4-1) 할인으로 보지 않는다
+        if _has(name, rules.discount_keywords) or (amount < 0 and _minus_after_amount(lines[i].text, rules)):
             found.append((i, ParsedItem(name, -abs(amount), DISCOUNT)))
             roles[i] = "discount"
         elif i < first_total and rules.min_amount <= amount <= rules.max_amount:

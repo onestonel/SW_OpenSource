@@ -67,6 +67,7 @@ cd server
 | 무시할 줄 · 합계 · 할인 낱말 | `parser.ParseRules` | `total_keywords`에 '총결제금액' 더하기 |
 | 표의 열 이름 | `ParseRules.column_keywords` | 머리줄에 '판매가'를 쓰는 영수증이면 `"unit": ("단가", "판매가")` |
 | 숫자 자리 오인식 고치기 | `ParseRules.digit_fixes` | OCR이 5를 S로 읽으면 `"S": "5"` |
+| 금액 뒤 과세 표시 | `ParseRules.tax_marks` | 기본 `("T",)` (`32,990 T`). 다른 표시를 찍는 영수증이면 더하기 |
 | 사진 키우기 · 명암 · 흑백 | `preprocess.PreprocessOptions` | `min_width=1400`(기본, dev 비교로 정함), `threshold=150` |
 | 전처리 단계 켜기 | `PreprocessOptions(crop, target_width, flatten, deskew, adaptive_threshold)` | 2회차 Ablation 결과로 기본은 모두 끔 ([보고서](../../../docs/ocr-report.md)) |
 | 엔진 설정 | 명령의 `--engine 이름:설정=값,...` | `tesseract:lang=kor_best`, `easyocr:width_ths=0.1`, `paddleocr:unwarp=true,words=true` |

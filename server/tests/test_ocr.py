@@ -58,6 +58,60 @@ def test_two_line_items_are_merged():
     assert r.total_amount == 23500
 
 
+def test_warehouse_receipt_with_code_lines():
+    # 창고형 마트: 이름 줄 + '상품코드 수량 단가 금액 T' 줄. 쿠폰 할인은 금액 뒤 빼기, 품목 중간에 금액 없는 소계 줄
+    r = parse(
+        "COSTCO",
+        "뉴케어구수한맛+",
+        "680231 1 32,990 32,990 T",
+        "동원 번데기",
+        "678820 2 13,990 27,980T",
+        "상품수 소계:2",
+        "단팥호빵95GX12",
+        "577263 1 9,790 9, 790 T",
+        "CPN",
+        "단팥호빵95GX12",
+        "7831 1 1,000 1,000-T",
+        "689637 프라이드치킨 1 17,970 17,970 T",
+    )
+    assert [(i.name, i.amount, i.kind) for i in r.items] == [
+        ("뉴케어구수한맛+", 32990, "ITEM"),
+        ("동원 번데기", 27980, "ITEM"),
+        ("단팥호빵95GX12", 9790, "ITEM"),
+        ("단팥호빵95GX12", -1000, "DISCOUNT"),
+        ("프라이드치킨", 17970, "ITEM"),
+    ]
+    assert (r.items[1].quantity, r.items[1].unit_price) == (2, 13990)
+    assert r.store_name == "COSTCO"
+
+
+def test_tax_mark_only_after_amount():
+    # 과세 표시 T는 줄 끝 금액 자리에서만 뗀다. 이름 속 T는 그대로
+    r = parse("찻집", "얼그레이 T 1 4,500", "합계 4,500")
+    assert [(i.name, i.amount) for i in r.items] == [("얼그레이 T", 4500)]
+
+
+def test_spaced_thousands_without_header():
+    r = parse("분식집", "김밥 1 3, 000", "합계 3,000")
+    assert [i.amount for i in r.items] == [3000]
+
+
+def test_name_with_trailing_number_merged_when_next_line_adds_up():
+    # 이름 끝 '*10'이 숫자로 읽혀도, 다음 줄이 단가 × 수량 = 금액으로 맞으면 한 품목이다
+    r = parse("이마트", "칠성사이다 210ml 10", "8801056095086 5,480 1 5,480", "합계 5,480")
+    assert [(i.name, i.amount) for i in r.items] == [("칠성사이다 210ml", 5480)]
+    # 산수가 맞지 않는 숫자 줄(날짜 · 번호)은 앞 품목에 붙이지 않는다
+    r = parse("분식집", "떡볶이 4,500", "2026 11 24", "합계 4,500")
+    assert [(i.name, i.amount) for i in r.items] == [("떡볶이", 4500)]
+
+
+def test_leading_minus_without_discount_word_is_not_a_discount():
+    # 앞에 빼기만 붙은 줄은 할인으로 보지 않는다. 할인으로 넣으면 위 품목 합으로 찾는 소계(13,560)가 깨진다 (보고서 4-1)
+    r = parse("농협", "앞다리 1 6,552", "앞다리 1 5,508", "로컬푸드 1 1,500", "(행사) 26년 -300", "총 구 13,560")
+    assert [i.amount for i in r.items] == [6552, 5508, 1500]
+    assert r.total_amount == 13560
+
+
 def test_ocr_noise_in_numbers():
     r = parse("분식집", "떡볶이 2 1O,000", "순대 1 4.500원", "합 계 14,500")
     assert [i.amount for i in r.items] == [10000, 4500]
