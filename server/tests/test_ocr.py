@@ -136,6 +136,38 @@ def test_round_price_lines_are_not_tax_lines():
     assert [i.amount for i in r.items] == [20000, 2000]
 
 
+def test_total_from_amount_repeated_in_payment_lines():
+    # 합계 낱말을 못 읽어도 결제 줄에 되풀이된 금액이 위 품목 합과 맞으면 합계이고, 그 줄부터 아래는 품목이 아니다
+    r = parse("해장국집", "양평해장국 11,000 1 11,000", "겨 11,000", "카 11,000")
+    assert r.total_amount == 11000
+    assert [i.name for i in r.items] == ["양평해장국"]
+
+
+def test_discount_reflected_total_from_repeated_amount():
+    # 낱말로 찾은 합계(13,560)가 할인 전 금액이고 결제 줄의 13,260이 '13,560 - 300'과 맞으면, 13,260이 합계이고 -300 줄은 할인이다
+    r = parse(
+        "농협", "앞다리 1 6,552", "앞다리 1 5,508", "로컬푸드 1 1,500", "(행사) 26년 -300",
+        "총 구 13,560", "내 실 13,260", "신 용 13,260",
+    )
+    assert r.total_amount == 13260
+    assert [i.amount for i in r.items] == [6552, 5508, 1500, -300]
+    assert r.check()["is_matched"]
+
+
+def test_same_price_items_are_not_repeated_total():
+    # 같은 가격 품목 두 개(20,000)는 가장 비싼 줄(40,000)보다 작아 합계 후보가 아니다
+    r = parse("치킨집", "후라이드 20,000", "양념 20,000", "합게 40,000")
+    assert r.total_amount == 40000
+    assert [i.amount for i in r.items] == [20000, 20000]
+
+
+def test_repeated_amount_ignored_when_arithmetic_fails():
+    # 되풀이된 금액(받은금액 20,000)이 품목 합과 맞지 않으면 합계로 쓰지 않는다
+    r = parse("식당", "김치찌개 8,000", "된장찌개 7,000", "합 개 15,000", "받은금액 20,000", "현금 20,000")
+    assert r.total_amount == 15000
+    assert [i.amount for i in r.items] == [8000, 7000]
+
+
 def test_ocr_noise_in_numbers():
     r = parse("분식집", "떡볶이 2 1O,000", "순대 1 4.500원", "합 계 14,500")
     assert [i.amount for i in r.items] == [10000, 4500]

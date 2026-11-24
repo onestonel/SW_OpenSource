@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field, replace
 from itertools import combinations
 from statistics import median
@@ -92,6 +93,8 @@ class ParseRules:
     tax_marks: tuple[str, ...] = ("T",)
     # 면세 물품 금액 줄. 세금 줄(공급가 + 부가세) 바로 위에 있으면 그 금액도 세금 합에 더한다 (면세 + 과세 + 부가세 = 합계)
     tax_free_keywords: tuple[str, ...] = ("면세",)
+    # 세금 줄 낱말. 반복 금액으로 합계를 찾을 때 세지 않는다 (면세물품가액 줄은 할인 전 금액이 한 번 더 찍힌 것이라)
+    tax_keywords: tuple[str, ...] = ("부가세", "부가가치세", "과세", "면세", "공급가", "VAT")
     # 숫자 자리에 자주 섞여 들어오는 비슷한 글자 (OCR이 0을 O로 읽는 등). 숫자가 반 이상인 낱말에만 쓴다
     digit_fixes: dict[str, str] = field(
         default_factory=lambda: {
@@ -481,6 +484,40 @@ def _tax_lines(
     return [], None
 
 
+def _repeated_total(
+    lines: list[Line],
+    split: list[tuple[str, list[int]]],
+    found: list[tuple[int, ParsedItem]],
+    start: int,
+    tax_idx: list[int],
+    rules: ParseRules,
+) -> tuple[int, int, int] | None:
+    """결제 줄에 두 번 이상 찍힌 금액으로 합계를 찾는다. (합계, 그 금액이 처음 맞는 줄, 반영한 할인)
+
+    합계 · 받을금액 · 카드 결제 줄은 같은 금액을 되풀이한다. 그런 금액 중 그 줄 위의 품목 합(또는 품목 합 - 그 위에
+    찍힌 빼기 금액 하나)과 맞는 가장 큰 것을 고른다. 같은 가격 품목 둘('후라이드 20,000' '양념 20,000')과 헷갈리지 않게
+    그 줄부터 아래에서 두 번 이상 나와야 하고, 그 위 품목 중 가장 비싼 것보다 작으면 안 되며, 산수가 맞아야만 쓴다.
+    """
+    rows = [
+        i
+        for i in range(start, len(lines))
+        if split[i][1] and i not in tax_idx and not _has(lines[i].text, rules.tax_keywords)
+    ]
+    counts = Counter(split[i][1][-1] for i in rows)
+    in_found = {i for i, _ in found}
+    for amount in sorted((a for a, c in counts.items() if c >= 2 and a >= rules.min_amount), reverse=True):
+        hits = [i for i in rows if split[i][1][-1] == amount]
+        for k in hits[:-1]:  # 이 줄과 그 아래에 한 번 더 나와야 결제 줄
+            items_above = [it.amount for i, it in found if i < k]
+            if not items_above or amount < max(items_above):
+                continue
+            negs = {-split[i][1][-1] for i in range(start, k) if i not in in_found and split[i][1] and split[i][1][-1] < 0}
+            above = sum(items_above)
+            if above == amount or above - amount in negs:
+                return amount, k, above - amount
+    return None
+
+
 def _cell_quantity(unit: int | None, qty: int | None, amount: int, rules: ParseRules) -> tuple[int | None, int | None]:
     """표에서 읽은 단가 · 수량 중 빈 칸을 금액으로 채운다. (수량, 단가)"""
     if qty is None and unit and amount % unit == 0 and 0 < amount // unit <= rules.max_quantity:
@@ -603,18 +640,38 @@ def parse_receipt(lines: list[Line], rules: ParseRules | None = None) -> ParsedR
 
     # 합계 낱말을 못 읽은 줄 찾기: 숫자가 하나뿐이고 금액이 위 품목들의 합과 같으면 합계(소계) 줄로 본다.
     # 수량 · 단가가 찍힌 품목 줄은 숫자가 둘 이상이라 여기에 걸리지 않는다
-    items: list[ParsedItem] = []
+    kept: list[tuple[int, ParsedItem]] = []
     running, inferred = 0, None
     for i, item in found:
-        if item.kind == ITEM and len(items) >= 2 and len(split[i][1]) == 1 and item.amount == running:
+        if item.kind == ITEM and len(kept) >= 2 and len(split[i][1]) == 1 and item.amount == running:
             inferred, roles[i] = i, "subtotal"
         elif inferred is not None and item.kind == ITEM:
             roles[i] = "other"  # 합계 줄 아래의 '품목'은 영수증 아래쪽 잡글로 본다
         else:
-            items.append(item)
+            kept.append((i, item))
             running += item.amount
     if total is None and inferred is not None:
         total, total_idx, roles[inferred] = split[inferred][1][-1], inferred, "total"
+
+    # 반복 금액(6회차): 합계를 못 찾았거나, 찾은 합계가 할인 전 금액(반복 금액 + 그 위의 빼기 금액)이면
+    # 반복 금액이 합계다. 그 줄부터 아래의 '품목'은 결제 줄이고, 산수에 쓴 빼기 줄은 할인이다
+    start = header_idx + 1 if header_idx is not None else 0
+    rep = _repeated_total(lines, split, kept, start, tax_idx, rules)
+    if rep and (total is None or (rep[2] > 0 and total - rep[0] == rep[2])):
+        amount, k, discount = rep
+        if total_idx is not None:
+            roles[total_idx] = "subtotal"
+        for i, _ in kept:
+            if i >= k:
+                roles[i] = "other"
+        if discount:  # _repeated_total이 산수에 쓴 빼기 줄 (품목 · 할인으로 잡히지 않은 줄)
+            in_kept = {i for i, _ in kept}
+            j = next(i for i in range(start, k) if i not in in_kept and split[i][1] and split[i][1][-1] == -discount)
+            kept.append((j, ParsedItem(split[j][0] or "할인", -discount, DISCOUNT)))
+            roles[j] = "discount"
+        kept = sorted((f for f in kept if f[0] < k), key=lambda f: f[0])
+        total, total_idx, roles[k] = amount, k, "total"
+    items = [it for _, it in kept]
     fixes = _reconcile(items, total)
 
     # 가게 이름: '상호:' 줄이 있으면 그것, 없으면 품목 · 머리줄보다 위에서 글자로 된 첫 줄
