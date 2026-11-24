@@ -60,6 +60,11 @@ def group_lines(boxes: list[TextBox], tolerance: float = 0.6) -> list[Line]:
     return lines
 
 
+def _column_boxes(boxes: list[TextBox]) -> bool:
+    """세로로 긴 글자 상자(높이 > 폭 × 2, 3글자 이상)가 있는지. 줄 간격이 좁으면 엔진이 이름 열을 '양양된도공'처럼 세로로 읽는다."""
+    return any(b.height > 2 * b.width and len(b.text.replace(" ", "")) >= 3 for b in boxes)
+
+
 def run_ocr(
     data: bytes,
     engine: OcrEngine | None = None,
@@ -71,7 +76,11 @@ def run_ocr(
     start = time.perf_counter()
     engine = engine or get_engine(settings.ocr_engine)
     image, notes = preprocess(data, prep) if engine.needs_image else (None, [])
-    lines = group_lines(engine.read(image), line_tolerance)
+    boxes = engine.read(image)
+    if getattr(engine, "rereads_dense", False) and _column_boxes(boxes):
+        boxes = engine.read(image, dense=True)
+        notes.append("글자가 세로로 이어 읽혀서, 줄 간격을 벌려 다시 읽었습니다")
+    lines = group_lines(boxes, line_tolerance)
     receipt = parse_receipt(lines, rules)
     receipt.warnings += notes
     elapsed = round((time.perf_counter() - start) * 1000)

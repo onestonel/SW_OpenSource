@@ -184,6 +184,7 @@ class PaddleOcrEngine:
 
     name = "paddleocr"
     needs_image = True
+    rereads_dense = True  # run_ocr가 이름 열이 세로로 읽힌 것을 보면 read(dense=True)로 한 번 더 읽는다
 
     def __init__(self, lang: str = "korean", unwarp: bool = False, words: bool = False, **options):
         try:
@@ -201,10 +202,16 @@ class PaddleOcrEngine:
             **options,
         )
 
-    def read(self, image: Image | None) -> list[TextBox]:
+    def read(self, image: Image | None, dense: bool = False) -> list[TextBox]:
+        det = {}
+        if dense:
+            # 줄 간격이 좁은 영수증: 세로로 늘려 줄 사이를 벌리고, 글자를 찾을 때는 사진을 줄여(긴 변 960) 큰 글자를
+            # 한 덩어리로 본다. 보통 영수증에서는 이웃 글자가 붙어 나빠지므로 증상이 있을 때만 쓴다 (보고서 5회차)
+            image = image.resize((image.width, round(image.height * 1.5)))
+            det = {"text_det_limit_type": "max", "text_det_limit_side_len": 960}
         bgr = self._np.array(image.convert("RGB"))[:, :, ::-1]  # PaddleOCR는 BGR 3채널 사진을 받는다
         boxes = []
-        for page in self._ocr.predict(bgr):
+        for page in self._ocr.predict(bgr, **det):
             for i, (text, conf, (x1, y1, x2, y2)) in enumerate(
                 zip(page["rec_texts"], page["rec_scores"], page["rec_boxes"], strict=True)
             ):

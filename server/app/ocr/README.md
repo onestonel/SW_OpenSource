@@ -69,6 +69,7 @@ cd server
 | 숫자 자리 오인식 고치기 | `ParseRules.digit_fixes` | OCR이 5를 S로 읽으면 `"S": "5"` |
 | 금액 뒤 과세 표시 | `ParseRules.tax_marks` | 기본 `("T",)` (`32,990 T`). 다른 표시를 찍는 영수증이면 더하기 |
 | 세금 줄로 합계 찾기 | `parser._tax_lines`, `ParseRules.tax_free_keywords` | 공급가 + 부가세(10%) 짝 줄을 산수로 찾아 품목에서 빼고, 합계 낱말이 없으면 면세 + 과세 + 부가세를 합계로 |
+| 빽빽한 영수증 다시 읽기 | `pipeline._column_boxes`, `PaddleOcrEngine.read(dense=True)` | 세로로 긴 상자(높이 > 폭 × 2, 3글자 이상)가 보이면 사진을 세로 1.5배로 늘리고 검출 960으로 다시 읽음 |
 | 사진 키우기 · 명암 · 흑백 | `preprocess.PreprocessOptions` | `min_width=1400`(기본, dev 비교로 정함), `threshold=150` |
 | 전처리 단계 켜기 | `PreprocessOptions(crop, target_width, flatten, deskew, adaptive_threshold)` | 2회차 Ablation 결과로 기본은 모두 끔 ([보고서](../../../docs/ocr-report.md)) |
 | 엔진 설정 | 명령의 `--engine 이름:설정=값,...` | `tesseract:lang=kor_best`, `easyocr:width_ths=0.1`, `paddleocr:unwarp=true,words=true` |

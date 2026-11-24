@@ -349,6 +349,37 @@ def test_real_engine_on_sample():
     assert result.check()["is_matched"]
 
 
+class _DenseEngine:
+    """처음엔 이름 열을 세로 상자로 읽고, dense=True로 다시 읽으면 제대로 읽는 가짜 엔진 (column=False면 처음부터 제대로)."""
+
+    name, needs_image, rereads_dense = "fake", True, True
+
+    def __init__(self, column: bool):
+        self.column, self.calls = column, []
+
+    def read(self, image, dense: bool = False):
+        self.calls.append(dense)
+        if self.column and not dense:
+            return [TextBox("된공소", 0.9, 0, 0, 20, 90), TextBox("6,000", 0.9, 100, 0, 40, 20)]
+        return [TextBox("된장찌개 6,000", 0.9, 0, 0, 140, 20), TextBox("합계 6,000", 0.9, 0, 30, 140, 20)]
+
+
+@pytest.mark.parametrize("column, calls", [(True, [False, True]), (False, [False])])
+def test_rereads_only_when_text_column_read_vertically(column, calls):
+    # 세로로 긴 상자(높이 > 폭 × 2, 3글자 이상)가 있을 때만 한 번 더 읽고, 다시 읽은 결과로 초안을 만든다
+    from io import BytesIO
+
+    from PIL import Image
+
+    photo = BytesIO()
+    Image.new("RGB", (40, 40), "white").save(photo, "PNG")
+    engine = _DenseEngine(column)
+    result = run_ocr(photo.getvalue(), engine).receipt
+    assert engine.calls == calls
+    assert [i.name for i in result.items] == ["된장찌개"]
+    assert any("다시 읽었습니다" in w for w in result.warnings) == column
+
+
 def _png(array) -> bytes:
     import cv2
 
