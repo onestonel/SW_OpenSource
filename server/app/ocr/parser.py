@@ -2,13 +2,22 @@
 
 판단 기준(낱말 · 숫자 범위)은 전부 ParseRules 한 곳에 모았다. 새 모양의 영수증을 잘못 읽으면
 여기 낱말을 더하고 `python -m app.ocr.bench`로 점수가 오르는지 확인한다.
+
+규칙보다 먼저 두 가지를 한다 (가게마다 다른 낱말이 아니라 모든 영수증에 통하는 구조를 쓴다).
+- 표 읽기(_read_columns): 낱말 위치가 있으면 머리줄의 '단가 · 수량 · 금액' x 위치로 열을 나눈다.
+  '69, 000'처럼 띄어 읽힌 숫자는 같은 열이라 이어 붙고, 열 사이의 잡글('_', 'ㆍ')은 버려진다.
+- 산수 검산(_reconcile): 단가×수량 ≠ 금액인 품목은 둘 중 하나를 잘못 읽은 것이다. 품목 합 = 합계가 되는 쪽을 고른다.
 나중에 LLM으로 바꾸고 싶으면 parse_receipt와 같은 모양(줄 목록 → ParsedReceipt)의 함수를 만들면 된다.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from itertools import combinations
+from statistics import median
+
+from .engines import TextBox, join_text
 
 ITEM, DISCOUNT = "ITEM", "DISCOUNT"
 
@@ -66,6 +75,10 @@ class ParseRules:
     store_keywords: tuple[str, ...] = ("상호", "매장명", "가맹점명", "점포명")
     # 품목 표의 머리줄. 이 낱말이 2개 이상 있고 숫자가 없는 줄 아래부터 품목으로 본다
     header_keywords: tuple[str, ...] = ("상품명", "품명", "메뉴", "품목", "단가", "수량", "금액")
+    # 머리줄에서 열 위치를 잡는 낱말 (낱말 위치를 주는 엔진에서만 쓴다)
+    column_keywords: dict[str, tuple[str, ...]] = field(
+        default_factory=lambda: {"unit": ("단가",), "qty": ("수량",), "amount": ("금액",)}
+    )
     # 합계 낱말. 앞 묶음일수록 우선한다 (할인 뒤 실제 낸 돈 > 할인 전 합계 > 소계)
     total_keywords: tuple[tuple[str, ...], ...] = (
         ("결제금액", "받을금액", "청구금액", "총결제", "결제합계"),
@@ -98,10 +111,16 @@ class ParseRules:
 
 @dataclass(frozen=True)
 class Line:
-    """글자 한 줄과 OCR 확신도(0~1)."""
+    """글자 한 줄과 OCR 확신도(0~1).
+
+    boxes: 엔진이 준 상자(위치). 비어 있으면(글자만 넣은 테스트 등) 표 읽기를 건너뛴다.
+    cells: 표 읽기로 나눈 (이름, 단가, 수량, 금액). 있으면 text를 다시 쪼개지 않고 이것을 쓴다.
+    """
 
     text: str
     conf: float = 1.0
+    boxes: tuple[TextBox, ...] = ()
+    cells: tuple[str, int | None, int | None, int] | None = None
 
 
 @dataclass
@@ -152,7 +171,12 @@ _NUM = re.compile(r"[-−–]?(?:\d{1,3}(?:[,.]\d{3})+|\d+)")
 _LETTER = re.compile(r"[가-힣A-Za-z]")
 _TIMES = re.compile(r"(\d)\s*[xX×*]\s*(\d)")
 _SKIP_TOKENS = {"x", "X", "×", "*", "@", "=", "|"}
-_NAME_STRIP = " :：·-=|[]【】<>'\"`"  # 괄호 ()는 '탕수육(소)'처럼 이름의 일부라 남긴다
+_NAME_STRIP = " :：·-=|[]【】<>'\"`ㆍ、.,*_"  # 괄호 ()는 '탕수육(소)'처럼 이름의 일부라 남긴다
+_INDEX = re.compile(r"^\d{1,3}[*._,)\]]*\s+")  # 이름 앞의 순번 '01 ' '08*. ' '12__ '
+
+
+def _clean_name(name: str) -> str:
+    return _INDEX.sub("", name.strip(_NAME_STRIP)).strip(_NAME_STRIP)
 
 
 def _compact(text: str) -> str:
@@ -214,8 +238,7 @@ def _split(text: str, rules: ParseRules) -> tuple[str, list[int]]:
         if n is not None and abs(n) >= 100:
             tokens = tokens[:k]
             break
-    name = re.sub(r"^\d{1,3}[.)]?\s+", "", " ".join(tokens))  # 앞의 순번 '01 김치찌개' 떼기
-    return name.strip(_NAME_STRIP), nums
+    return _clean_name(" ".join(tokens)), nums
 
 
 def _quantity(nums: list[int], rules: ParseRules) -> tuple[int | None, int | None]:
@@ -276,12 +299,177 @@ def _clean_store(text: str, rules: ParseRules) -> str:
     return re.sub(r"\s+", " ", text).strip(_NAME_STRIP)
 
 
+def _words(boxes: tuple[TextBox, ...]) -> list[TextBox]:
+    """상자를 띄어쓰기 단위 낱말 상자로 쪼갠다. 여러 낱말이 든 상자(줄 단위 엔진)는 글자 수 비율로 위치를 나눈다."""
+    out = []
+    for b in boxes:
+        n = max(len(b.text), 1)
+        for m in re.finditer(r"\S+", b.text):
+            left = b.left + b.width * m.start() / n
+            out.append(TextBox(m.group(), b.conf, round(left), b.top, round(b.width * len(m.group()) / n), b.height))
+    return sorted(out, key=lambda w: w.left)
+
+
+def _center(box: TextBox) -> float:
+    return box.left + box.width / 2
+
+
+def _find_columns(header: Line, rules: ParseRules) -> tuple[float, dict[str, float]] | None:
+    """머리줄에서 (이름 칸의 오른쪽 경계, {열: 가운데 x})를 찾는다. '금 액'처럼 쪼개 읽혀도 찾도록 글자 단위로 본다."""
+    chars: list[tuple[str, float, float]] = []  # 글자, 가운데 x, 글자 폭
+    for w in _words(header.boxes):
+        cw = w.width / len(w.text)
+        chars += [(c, w.left + cw * (k + 0.5), cw) for k, c in enumerate(w.text)]
+    joined = "".join(c for c, _, _ in chars)
+    centers, starts = {}, []
+    for kind, keywords in rules.column_keywords.items():
+        for kw in keywords:
+            at = joined.find(kw)
+            if at >= 0:
+                span = chars[at : at + len(kw)]
+                centers[kind] = sum(x for _, x, _ in span) / len(span)
+                starts.append(span[0][1] - span[0][2] / 2)
+                break
+    if not centers:
+        return None
+    return min(starts), centers
+
+
+def _column_digits(token: str, fixes: dict[str, str]) -> str:
+    """숫자 열 안의 낱말은 숫자처럼 생긴 글자만으로 되어 있으면 숫자로 읽는다 ('OOO' → '000', 'S,OOO' → '5,000').
+
+    _fix_digits는 이름에도 쓰여서 숫자가 반 이상인 낱말만 고치지만, 숫자 열에서는 글자일 이유가 없다
+    (EasyOCR은 0을 O로 자주 읽는다). 한 글자짜리('B', 'I')는 표의 선 · 잡글일 수 있어 고치지 않는다.
+    """
+    looks_numeric = all(c.isdigit() or c in fixes or c in ",.-−–" for c in token)
+    if looks_numeric and (len(token) >= 2 or token.isdigit()):
+        return "".join(fixes.get(c, c) for c in token)
+    return token
+
+
+def _cell(words: list[TextBox], center: float, rules: ParseRules, signed: bool = False) -> int | None:
+    """한 열에 든 낱말들 → 숫자. 띄어 읽힌 조각('69,' '000')은 잇고, 숫자 아닌 잡글은 버린다.
+
+    간격이 글자 높이보다 넓게 떨어진 덩어리는 다른 칸의 숫자다 (머리줄에서 '수량'을 못 읽으면 수량 '1'이
+    금액 열에 들어와 '1' + '3,980' = 13,980이 된다). 그래서 열 가운데에 가장 가까운 덩어리 하나만 쓴다.
+    """
+    words = [replace(w, text=_column_digits(w.text, rules.digit_fixes)) for w in words]
+    groups: list[list[TextBox]] = []
+    for w in words:
+        if groups and w.left - (groups[-1][-1].left + groups[-1][-1].width) <= w.height * 0.8:
+            groups[-1].append(w)
+        else:
+            groups.append([w])
+    groups = [g for g in groups if re.search(r"\d", "".join(w.text for w in g))]
+    if not groups:
+        return None
+    nearest = min(groups, key=lambda g: abs((g[0].left + g[-1].left + g[-1].width) / 2 - center))
+    text = "".join(_fix_digits(w.text, rules.digit_fixes) for w in nearest)
+    digits = re.sub(r"\D", "", text)
+    if not digits or int(digits) == 0:  # '000'만 읽힌 칸(앞자리를 놓침)은 없는 것으로 본다
+        return None
+    sign = -1 if signed and re.match(r"\D*?[-−–]\d", text) else 1
+    return sign * int(digits)
+
+
+def _read_columns(lines: list[Line], rules: ParseRules) -> list[Line]:
+    """머리줄 아래 줄을 낱말 위치로 (이름, 단가, 수량, 금액) 칸에 나눈다. 머리줄이나 위치가 없으면 그대로 돌려준다."""
+    header_idx = next(
+        (i for i, ln in enumerate(lines) if ln.boxes and _is_header(ln.text, _split(ln.text, rules)[1], rules)), None
+    )
+    found = _find_columns(lines[header_idx], rules) if header_idx is not None else None
+    if found is None:
+        return lines
+    name_edge, centers = found
+    rows = [(i, _words(ln.boxes)) for i, ln in enumerate(lines) if i > header_idx and ln.boxes]
+    if "amount" not in centers:
+        # 머리줄의 '금액'을 못 읽었으면, 기존 열보다 오른쪽에 있는 '줄마다 맨 오른쪽 숫자'의 가운데로 정한다
+        last = max(centers.values())
+        xs = [_center(w[-1]) for _, w in rows if w and re.search(r"\d", w[-1].text) and _center(w[-1]) > last]
+        if not xs:
+            return lines
+        centers["amount"] = median(xs)
+
+    out = list(lines)
+    for i, words in rows:
+        text = lines[i].text
+        if _has(text, rules.ignore_keywords) or any(re.search(p, _compact(text)) for p in rules.ignore_patterns):
+            continue
+        name_words, cols = [], {kind: [] for kind in centers}
+        for w in words:
+            if _center(w) < name_edge:
+                name_words.append(w)
+            else:
+                cols[min(centers, key=lambda k: abs(centers[k] - _center(w)))].append(w)
+        cell = {kind: _cell(cols[kind], centers[kind], rules, signed=kind == "amount") for kind in centers}
+        amount, unit, qty = cell["amount"], cell.get("unit"), cell.get("qty")
+        if amount is None:
+            continue  # 금액 칸이 비면 품목 줄이 아니다 (글자만 있는 줄 · 이름이 두 줄인 품목의 첫 줄)
+        if qty is not None and qty > rules.max_quantity:
+            qty = None
+        name = _clean_name(join_text(name_words))
+        shown = " ".join([name] + [f"{n:,}" for n in (unit, qty, amount) if n is not None])
+        out[i] = replace(lines[i], text=shown, cells=(name, unit, qty, amount))
+    return out
+
+
+def _cell_quantity(unit: int | None, qty: int | None, amount: int, rules: ParseRules) -> tuple[int | None, int | None]:
+    """표에서 읽은 단가 · 수량 중 빈 칸을 금액으로 채운다. (수량, 단가)"""
+    if qty is None and unit and amount % unit == 0 and 0 < amount // unit <= rules.max_quantity:
+        qty = amount // unit
+    if unit is None and qty and amount % qty == 0:
+        unit = amount // qty
+    return qty, unit
+
+
+# 단가×수량이 어긋난 품목이 이보다 많으면 조합(2^n)을 다 보지 않는다
+_MAX_FIX_CANDIDATES = 12
+
+
+def _reconcile(items: list[ParsedItem], total: int | None) -> list[str]:
+    """단가×수량 ≠ 금액인 품목은 금액과 단가×수량 중 하나를 잘못 읽은 것이다.
+
+    품목 합이 합계와 정확히 맞는 조합 중 고친 칸이 가장 적은 것을 고른다. 합계도 잘못 읽었으면 틀린 쪽에 맞출 수 있어서
+    고친 칸은 반드시 경고로 알린다. 맞는 조합이 없으면 고치지 않고 어긋난 품목만 알린다.
+    """
+    odd = [
+        it
+        for it in items
+        if it.kind == ITEM and it.quantity and it.unit_price and it.quantity * it.unit_price != it.amount
+    ]
+    if not odd:
+        return []
+    if total is not None and len(odd) <= _MAX_FIX_CANDIDATES:
+        diff = total - sum(it.amount for it in items)
+        for k in range(len(odd) + 1):
+            combo = next(
+                (c for c in combinations(odd, k) if sum(it.quantity * it.unit_price - it.amount for it in c) == diff),
+                None,
+            )
+            if combo is None:
+                continue
+            if not combo:
+                return []  # 금액 칸끼리는 합계와 맞으니 단가나 수량을 잘못 읽은 것. 초안(금액)은 그대로 둔다
+            notes = []
+            for it in combo:
+                fixed = it.quantity * it.unit_price
+                notes.append(f"'{it.name}' {it.amount:,}원 → {fixed:,}원")
+                it.amount = fixed
+            return [f"단가×수량으로 금액을 고쳐 합계와 맞췄습니다: {', '.join(notes)}. 맞는지 확인해 주세요."]
+    names = ", ".join(f"'{it.name}'" for it in odd[:3])
+    return [f"단가×수량과 금액이 다른 품목이 있습니다: {names}. 금액을 확인해 주세요."]
+
+
 def parse_receipt(lines: list[Line], rules: ParseRules | None = None) -> ParsedReceipt:
     """글자 줄 목록(위에서 아래 순서) → 가게 이름 · 합계 · 품목."""
     rules = rules or ParseRules()
-    lines = [Line(_normalize(ln.text), ln.conf) for ln in lines if ln.text.strip()]
+    lines = [replace(ln, text=_normalize(ln.text)) for ln in lines if ln.text.strip()]
+    lines = _read_columns(lines, rules)
     lines = _merge_two_line_items(lines, rules)
-    split = [_split(ln.text, rules) for ln in lines]
+    split = [
+        (ln.cells[0], [n for n in ln.cells[1:] if n is not None]) if ln.cells else _split(ln.text, rules)
+        for ln in lines
+    ]
     roles = ["other"] * len(lines)
 
     for i, ln in enumerate(lines):
@@ -324,7 +512,8 @@ def parse_receipt(lines: list[Line], rules: ParseRules | None = None) -> ParsedR
             found.append((i, ParsedItem(name, -abs(amount), DISCOUNT)))
             roles[i] = "discount"
         elif i < first_total and rules.min_amount <= amount <= rules.max_amount:
-            qty, unit = _quantity(nums, rules)
+            cells = lines[i].cells
+            qty, unit = _cell_quantity(cells[1], cells[2], amount, rules) if cells else _quantity(nums, rules)
             found.append((i, ParsedItem(name, amount, ITEM, qty, unit)))
             roles[i] = "item"
 
@@ -342,6 +531,7 @@ def parse_receipt(lines: list[Line], rules: ParseRules | None = None) -> ParsedR
             running += item.amount
     if total is None and inferred is not None:
         total, total_idx, roles[inferred] = split[inferred][1][-1], inferred, "total"
+    fixes = _reconcile(items, total)
 
     # 가게 이름: '상호:' 줄이 있으면 그것, 없으면 품목 · 머리줄보다 위에서 글자로 된 첫 줄
     store = None
@@ -363,7 +553,7 @@ def parse_receipt(lines: list[Line], rules: ParseRules | None = None) -> ParsedR
     parsed = ParsedReceipt(
         store or None, total, items, [ParsedLine(ln.text, ln.conf, r) for ln, r in zip(lines, roles, strict=True)], []
     )
-    parsed.warnings = _warnings(parsed, rules)
+    parsed.warnings = fixes + _warnings(parsed, rules)
     return parsed
 
 

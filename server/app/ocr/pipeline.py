@@ -6,7 +6,7 @@ V2에서 RabbitMQ Worker가 생기면 Worker는 저장된 사진을 읽어 run_o
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ..core.config import settings
 from .engines import OcrEngine, TextBox, get_engine
@@ -19,6 +19,8 @@ class OcrResult:
     engine: str
     elapsed_ms: int
     receipt: ParsedReceipt
+    # 파서를 거치기 전 엔진이 읽은 줄 글자. 엔진의 인식 실력만 따로 잴 때 쓴다 (API 응답에는 넣지 않는다)
+    raw_lines: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         r = self.receipt
@@ -49,10 +51,13 @@ def group_lines(boxes: list[TextBox], tolerance: float = 0.6) -> list[Line]:
             rows[-1].append(box)
         else:
             rows.append([box])
-    return [
-        Line(" ".join(b.text for b in sorted(row, key=lambda b: b.left)), sum(b.conf for b in row) / len(row))
-        for row in rows
-    ]
+    lines = []
+    for row in rows:
+        row.sort(key=lambda b: b.left)
+        # 낱말 위치(엔진이 주면 낱말, 아니면 상자 자체)도 넘긴다. parser가 표의 열을 나누는 데 쓴다
+        words = tuple(w for b in row for w in (b.words or (b,)))
+        lines.append(Line(" ".join(b.text for b in row), sum(b.conf for b in row) / len(row), words))
+    return lines
 
 
 def run_ocr(
@@ -65,7 +70,9 @@ def run_ocr(
     """사진 바이트 → OcrResult. 엔진을 정하지 않으면 OCR_ENGINE 설정을 쓴다."""
     start = time.perf_counter()
     engine = engine or get_engine(settings.ocr_engine)
-    image = preprocess(data, prep) if engine.needs_image else None
+    image, notes = preprocess(data, prep) if engine.needs_image else (None, [])
     lines = group_lines(engine.read(image), line_tolerance)
     receipt = parse_receipt(lines, rules)
-    return OcrResult(engine.name, round((time.perf_counter() - start) * 1000), receipt)
+    receipt.warnings += notes
+    elapsed = round((time.perf_counter() - start) * 1000)
+    return OcrResult(engine.name, elapsed, receipt, [ln.text for ln in lines])

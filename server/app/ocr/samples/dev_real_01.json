@@ -1,0 +1,21 @@
+{
+  "store_name": null,
+  "total_amount": 73550,
+  "items": [
+    { "name": "노브랜드 굿밀크우", "amount": 1680, "kind": "ITEM", "quantity": 1, "unit_price": 1680 },
+    { "name": "스마트알뜰양복커버", "amount": 2590, "kind": "ITEM", "quantity": 1, "unit_price": 2590 },
+    { "name": "농심 포스틱 84g", "amount": 1120, "kind": "ITEM", "quantity": 1, "unit_price": 1120 },
+    { "name": "농심 올리브짜파게", "amount": 3850, "kind": "ITEM", "quantity": 1, "unit_price": 3850 },
+    { "name": "산딸기 500g/박스", "amount": 6980, "kind": "ITEM", "quantity": 1, "unit_price": 6980 },
+    { "name": "(G) 서핑워터슈NY", "amount": 19800, "kind": "ITEM", "quantity": 1, "unit_price": 19800 },
+    { "name": "대여용부직포쇼핑백", "amount": 500, "kind": "ITEM", "quantity":1, "unit_price": 500 },
+    { "name": "호주곡물오이스터블", "amount": 14720, "kind": "ITEM", "quantity": 1, "unit_price": 14720 },
+    { "name": "오뚜기 콤비네이션", "amount": 5980, "kind": "ITEM", "quantity": 1, "unit_price": 5980 },
+    { "name": "꼬깔콘허니버터132G", "amount": 1580, "kind": "ITEM", "quantity": 1, "unit_price": 1580 },
+    { "name": "CJ미니드레싱골라담", "amount": 3980, "kind": "ITEM", "quantity": 1, "unit_price": 3980 },
+    { "name": "청정원허브맛솔트(", "amount": 1980, "kind": "ITEM", "quantity": 1, "unit_price": 1980 },
+    { "name": "태국미니아스파라거", "amount": 4580, "kind": "ITEM", "quantity": 1, "unit_price": 4580 },
+    { "name": "롯데 수박바젤리 56", "amount": 1960, "kind": "ITEM", "quantity": 2, "unit_price": 980 },
+    { "name": "바리스타 쇼콜라 32", "amount": 2250, "kind": "ITEM", "quantity": 1, "unit_price": 2250 }
+  ]
+}

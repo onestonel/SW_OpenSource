@@ -1,0 +1,27 @@
+{
+  "store_name": "벙커힐베이커리",
+  "total_amount": 59000,
+  "items": [
+    {
+      "name": "토마토 파스타",
+      "amount": 19000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 19000
+    },
+    {
+      "name": "마르게리타 피자",
+      "amount": 22000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 22000
+    },
+    {
+      "name": "리코타 샐러드",
+      "amount": 18000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 18000
+    }
+  ]
+}

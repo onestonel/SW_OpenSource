@@ -1,0 +1,13 @@
+{
+  "store_name": "싱싱주스[일산점]",
+  "total_amount": 4500,
+  "items": [
+    {
+      "name": "딸바(딸기+바나나)",
+      "amount": 4500,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 4500
+    }
+  ]
+}

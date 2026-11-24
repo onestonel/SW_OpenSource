@@ -1,0 +1,67 @@
+{
+  "store_name": "이마트 파주점",
+  "total_amount": 91800,
+  "items": [
+    {
+      "name": "이맛쌀20kg",
+      "amount": 66980,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 66980
+    },
+    {
+      "name": "농축산물 할인지원",
+      "amount": -3000,
+      "kind": "DISCOUNT"
+    },
+    {
+      "name": "명진 오버핏 중 1+1",
+      "amount": 2000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2000
+    },
+    {
+      "name": "음식물종량 3L*10개",
+      "amount": 1400,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 1400
+    },
+    {
+      "name": "칠성사이다 210ml*10",
+      "amount": 5480,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 5480
+    },
+    {
+      "name": "NoB 위생장갑140매",
+      "amount": 2180,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2180
+    },
+    {
+      "name": "에탄올워셔액1.8L",
+      "amount": 800,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 800
+    },
+    {
+      "name": "미용티슈 250매*3입",
+      "amount": 3980,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 3980
+    },
+    {
+      "name": "행사용피자",
+      "amount": 11980,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 11980
+    }
+  ]
+}

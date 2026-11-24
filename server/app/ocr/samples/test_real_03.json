@@ -1,0 +1,11 @@
+{
+  "store_name": "하루가",
+  "total_amount": 95500,
+  "items": [
+    { "name": "공기밥", "amount": 2000, "kind": "ITEM", "quantity": 2, "unit_price": 1000 },
+    { "name": "돼지반마리", "amount": 15000, "kind": "ITEM", "quantity": 1, "unit_price": 15000 },
+    { "name": "매운라면", "amount": 10500, "kind": "ITEM", "quantity": 3, "unit_price": 3500 },
+    { "name": "소주", "amount": 14000, "kind": "ITEM", "quantity":4, "unit_price": 3500 },
+    { "name": "숙성삼겹살", "amount": 54000, "kind": "ITEM", "quantity": 12, "unit_price": 4500 }
+  ]
+}

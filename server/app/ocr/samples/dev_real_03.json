@@ -1,0 +1,8 @@
+{
+  "store_name": "백소정 건대본점",
+  "total_amount": 36700,
+  "items": [
+    { "name": "마제소바", "amount": 8900, "kind": "ITEM", "quantity": 1, "unit_price": 8900 },
+    { "name": "냉소바+돈카츠", "amount": 27800, "kind": "ITEM", "quantity": 2, "unit_price": 13900 }
+  ]
+}

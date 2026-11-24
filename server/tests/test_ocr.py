@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from app.ocr.bench import score
-from app.ocr.engines import EngineUnavailable, TextBox, get_engine
+from app.ocr.bench import engine_score, partial_similar, score
+from app.ocr.engines import EngineUnavailable, TextBox, get_engine, make_engine, parse_settings
 from app.ocr.parser import Line, parse_receipt
 from app.ocr.pipeline import group_lines, run_ocr
 
@@ -107,6 +107,136 @@ def test_group_lines_by_height():
     assert [ln.text for ln in group_lines(boxes)] == ["삼겹살 48,000", "맥주 10,000"]
 
 
+def box(text: str, left: int, top: int, width: int) -> TextBox:
+    return TextBox(text, 0.9, left, top, width, 20)
+
+
+def test_table_columns_from_word_positions():
+    # 진짜 사진에서 본 모양: 띄어 읽힌 금액('69,' '000'), 열 사이 잡글('ㆍ'), 앞자리를 놓친 단가('000'), 순번('01*')
+    lines = group_lines(
+        [
+            box("상품명", 40, 0, 60), box("단가", 290, 0, 40), box("수량", 400, 0, 40),
+            box("금", 520, 0, 20), box("액", 550, 0, 20),  # '금액'이 두 낱말로 쪼개져 읽힘
+            box("01*", 0, 30, 30), box("양념갈비", 40, 30, 80), box("ㆍ", 240, 30, 10),
+            box("69,", 280, 30, 30), box("000", 315, 30, 30), box("1", 415, 30, 10),
+            box("69,", 510, 30, 30), box("000", 545, 30, 30),
+            box("된장찌개", 40, 60, 80), box("000", 300, 60, 30), box("2", 415, 60, 10),
+            box("6,", 520, 60, 20), box("000", 545, 60, 30),
+            box("합계", 40, 90, 40), box("75,000", 510, 90, 60),
+        ]
+    )  # fmt: skip
+    r = parse_receipt(lines)
+    assert [(i.name, i.amount, i.quantity, i.unit_price) for i in r.items] == [
+        ("양념갈비", 69000, 1, 69000),
+        ("된장찌개", 6000, 2, 3000),
+    ]
+    assert r.total_amount == 75000
+
+
+def test_amount_column_guessed_when_header_misread():
+    # 머리줄의 '금액'을 '글이'로 잘못 읽어도 줄마다 맨 오른쪽 숫자 위치로 금액 열을 정한다
+    lines = group_lines(
+        [
+            box("품명", 40, 0, 40), box("단가", 290, 0, 40), box("수량", 400, 0, 40), box("글이", 530, 0, 40),
+            box("김밥", 40, 30, 40), box("3,000", 290, 30, 50), box("2", 415, 30, 10), box("6,000", 520, 30, 50),
+            box("합계", 40, 60, 40), box("6,000", 520, 60, 50),
+        ]
+    )  # fmt: skip
+    r = parse_receipt(lines)
+    assert [(i.name, i.amount, i.quantity) for i in r.items] == [("김밥", 6000, 2)]
+    assert r.total_amount == 6000
+
+
+def test_far_apart_numbers_in_one_column_are_not_joined():
+    # 머리줄의 '수량'을 못 읽으면 수량 '1'이 금액 열로 들어온다. '1' + '3,980' = 13,980으로 잇지 않는다
+    lines = group_lines(
+        [
+            box("상품명", 40, 0, 60), box("단가", 290, 0, 40), box("9장", 400, 0, 40), box("금액", 530, 0, 40),
+            box("양파", 40, 30, 40), box("3,980", 285, 30, 50), box("1", 450, 30, 10), box("3,980", 520, 30, 50),
+        ]
+    )  # fmt: skip
+    assert [(i.name, i.amount) for i in parse_receipt(lines).items] == [("양파", 3980)]
+
+
+def test_misread_amount_fixed_by_arithmetic():
+    # 1,580 × 1 ≠ 1,560: 단가로 고치면 품목 합이 합계와 맞으니 금액을 잘못 읽은 것
+    r = parse("가게", "상품명 단가 수량 금액", "김밥 1,580 1 1,560", "라면 4,000 1 4,000", "합계 5,580")
+    assert [i.amount for i in r.items] == [1580, 4000]
+    assert r.check()["is_matched"]
+    assert "'김밥' 1,560원 → 1,580원" in r.warnings[0]
+
+
+def test_arithmetic_keeps_amount_when_total_agrees():
+    # 금액끼리 합계와 맞으면 단가를 잘못 읽은 것이라 초안은 그대로, 경고도 없다
+    r = parse("가게", "김밥 1,580 1 1,560", "라면 4,000 1 4,000", "합계 5,560")
+    assert [i.amount for i in r.items] == [1560, 4000]
+    assert r.warnings == []
+
+
+def test_arithmetic_prefers_fewest_changes():
+    # +150은 '쫄면' 하나 또는 '김밥'+'라면' 둘로 맞출 수 있다 → 하나만 고친다
+    r = parse("가게", "김밥 1,000 1 900", "라면 2,000 1 1,950", "쫄면 3,000 1 2,850", "합계 5,850")
+    assert [i.amount for i in r.items] == [900, 1950, 3000]
+
+
+def test_arithmetic_warns_when_nothing_fits():
+    r = parse("가게", "김밥 1,580 1 1,560", "라면 4,000 1 4,000", "합계 9,999")
+    assert [i.amount for i in r.items] == [1560, 4000]
+    assert any("단가×수량과 금액이 다른 품목" in w for w in r.warnings)
+
+
+def test_letter_o_read_as_zero_in_number_columns():
+    # EasyOCR은 0을 O로 자주 읽는다: 숫자 열에서는 'OOO' · '0OO'도 숫자로 본다. 이름 칸의 글자는 그대로
+    lines = group_lines(
+        [
+            box("상품명", 40, 0, 60), box("단가", 290, 0, 40), box("수량", 400, 0, 40), box("금액", 530, 0, 40),
+            box("SOJU", 40, 30, 60), box("5,", 280, 30, 20), box("0OO", 305, 30, 30), box("1", 415, 30, 10),
+            box("5,", 510, 30, 20), box("OOO", 535, 30, 30),
+        ]
+    )  # fmt: skip
+    items = parse_receipt(lines).items
+    assert [(i.name, i.amount, i.unit_price) for i in items] == [("SOJU", 5000, 5000)]
+
+
+def test_engine_score_reads_raw_text_only():
+    expected = {
+        "items": [
+            {"name": "양념갈비1.2kg", "amount": 69000, "kind": "ITEM"},
+            {"name": "된장찌개", "amount": 6000, "kind": "ITEM"},
+            {"name": "공기밥", "amount": 6000, "kind": "ITEM"},
+            {"name": "쿠폰할인", "amount": -3000, "kind": "DISCOUNT"},
+        ]
+    }
+    raw = [
+        "양념갈비 1.2kg 69, 000 1 69,000",  # 천 단위 쉼표 옆 띄어쓰기는 붙여서 본다
+        "된장찌개 3,000 2 6,000",
+        "공 1,000 3 3,000",  # 이름을 못 읽음. 6,000은 위 줄에 한 번뿐이라 두 번째 6,000도 못 맞힘
+        "쿠폰할인 -3,000",
+        "1,680 1 1,680",  # 칸 사이 띄어쓰기는 붙이지 않는다 (1680116 80이 되면 안 됨)
+    ]
+    assert engine_score(expected, raw) == {"amount_hit": 3, "name_hit": 3}
+    assert engine_score(expected, ["69, OOO"])["amount_hit"] == 0  # O를 0으로 읽은 것은 엔진이 틀린 것
+
+
+def test_partial_similar_finds_name_inside_line():
+    assert partial_similar("된장찌개", "01된장찌개30002") == 1.0
+    assert partial_similar("된장찌개", "된장찌게") == 0.75
+    assert partial_similar("갈비탕", "칼ㄴ12000") < 0.7
+
+
+def test_engine_settings_from_command_line():
+    assert parse_settings(["crop", "min_width=1", "grayscale=false", "width_ths=0.1", "lang=kor_best"]) == {
+        "crop": True,
+        "min_width": 1,
+        "grayscale": False,
+        "width_ths": 0.1,
+        "lang": "kor_best",
+    }
+    assert make_engine("stub").name == "stub"
+    with pytest.raises(EngineUnavailable):
+        make_engine("없는엔진:x=1")
+
+
 def test_score():
     expected = {
         "store_name": "같이고기",
@@ -139,3 +269,58 @@ def test_real_engine_on_sample():
     result = run_ocr(sample.read_bytes(), engine).receipt
     assert result.total_amount == 40000
     assert result.check()["is_matched"]
+
+
+def _png(array) -> bytes:
+    import cv2
+
+    return cv2.imencode(".png", array)[1].tobytes()
+
+
+def _striped_paper(np):
+    """흰 종이에 검은 가로줄(글자 줄 흉내) 300x400."""
+    paper = np.full((400, 300), 240, np.uint8)
+    for y in range(30, 380, 25):
+        paper[y : y + 8, 20:280] = 20
+    return paper
+
+
+def test_crop_straightens_receipt_on_desk():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    from app.ocr.preprocess import PreprocessOptions, preprocess
+
+    desk = np.full((800, 600), 60, np.uint8)
+    desk[200:600, 150:450] = _striped_paper(np)
+    tilted = cv2.warpAffine(desk, cv2.getRotationMatrix2D((300, 400), 4, 1.0), (600, 800), borderValue=60)
+    opts = PreprocessOptions(crop=True, min_width=10, max_width=5000, autocontrast=False)
+    img, notes = preprocess(_png(tilted), opts)
+    assert notes == []
+    assert abs(img.width - 300) < 20 and abs(img.height - 400) < 20  # 책상은 빠지고 종이만 남는다
+    assert np.array(img).mean() > 150  # 종이 안쪽(밝음)만 남았다
+
+
+def test_crop_reports_when_no_receipt():
+    np = pytest.importorskip("numpy")
+    from app.ocr.preprocess import PreprocessOptions, preprocess
+
+    dark = np.full((400, 300), 40, np.uint8)
+    dark[10:30, 10:30] = 250  # 종이라기엔 너무 작은 밝은 곳
+    _, notes = preprocess(_png(dark), PreprocessOptions(crop=True))
+    assert notes == ["영수증 영역을 찾지 못해 사진 전체를 읽었습니다."]
+
+
+def test_deskew_levels_text_lines():
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    from app.ocr.preprocess import PreprocessOptions, preprocess
+
+    paper = _striped_paper(np)
+    tilted = cv2.warpAffine(paper, cv2.getRotationMatrix2D((150, 200), 3, 1.0), (300, 400), borderValue=240)
+    opts = PreprocessOptions(deskew=True, min_width=10, max_width=5000, autocontrast=False)
+    img, _ = preprocess(_png(tilted), opts)
+    rows = np.array(img)[:, 60:240].mean(axis=1)
+    # 줄이 수평이면 한 행이 통째로 검거나 희다. 기울어 있으면 회색 행(반쯤 검은 행)이 많다
+    half = ((rows > 60) & (rows < 200)).sum()
+    before = np.array(tilted)[:, 60:240].mean(axis=1)
+    assert half < ((before > 60) & (before < 200)).sum() / 2

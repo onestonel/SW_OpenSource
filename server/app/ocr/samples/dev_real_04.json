@@ -1,0 +1,10 @@
+{
+  "store_name": "GS25포곡골든점",
+  "total_amount": 7080,
+  "items": [
+    { "name": "마늘빅프랑크", "amount": 2100, "kind": "ITEM", "quantity": 1, "unit_price": 2100 },
+    { "name": "예거라들러레몬", "amount": 3300, "kind": "ITEM", "quantity": 1, "unit_price": 3300 },
+    { "name": "마운틴블러스트", "amount": 2100, "kind": "ITEM", "quantity": 1, "unit_price": 2100 },
+    { "name": "판촉/팝 할인", "amount": -420, "kind": "DISCOUNT"}
+  ]
+}
