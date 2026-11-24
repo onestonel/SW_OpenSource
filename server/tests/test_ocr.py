@@ -112,6 +112,30 @@ def test_leading_minus_without_discount_word_is_not_a_discount():
     assert r.total_amount == 13560
 
 
+def test_misread_tax_lines_are_not_items():
+    # 과세 · 부가세 낱말을 잘못 읽어도('관세 매출' '분가세') 공급가 + 부가세(공급가의 10%) 산수로 세금 줄인 것을 안다
+    r = parse("GS25", "마늘빅프랑크 1 2,100", "예거라들러레몬 1 3,300", "관세 매출 4,909", "분가세 491", "합 계 5,400")
+    assert [i.name for i in r.items] == ["마늘빅프랑크", "예거라들러레몬"]
+    assert r.total_amount == 5400
+    assert r.check()["is_matched"]
+
+
+def test_total_from_tax_lines_when_total_word_unreadable():
+    # 합계 낱말을 못 읽으면 면세 + 과세 + 부가세가 합계다. 세금 줄 아래 줄('결제금액'을 잘못 읽은 줄)은 품목이 아니다
+    r = parse(
+        "이마트", "이맛쌀20kg 1 66,980", "칠성사이다 1 5,480",
+        "(*)면세 물품 66,980", "과세 물품 4,982", "부가세 498", "제금 액 5,480",
+    )
+    assert r.total_amount == 72460
+    assert [i.amount for i in r.items] == [66980, 5480]
+
+
+def test_round_price_lines_are_not_tax_lines():
+    # 공급가는 100원 단위로 떨어지지 않는 금액만 본다: 20,000원 + 2,000원은 세금 줄이 아니라 가격 줄이다
+    r = parse("치킨집", "후라이드 20,000", "콜라 2,000", "합계 22,000")
+    assert [i.amount for i in r.items] == [20000, 2000]
+
+
 def test_ocr_noise_in_numbers():
     r = parse("분식집", "떡볶이 2 1O,000", "순대 1 4.500원", "합 계 14,500")
     assert [i.amount for i in r.items] == [10000, 4500]

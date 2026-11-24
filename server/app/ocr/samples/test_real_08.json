@@ -1,0 +1,55 @@
+{
+  "store_name": "빅마트",
+  "total_amount": 21810,
+  "items": [
+    {
+      "name": "재사용쓰레기봉투-10매 20L",
+      "amount": 8000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 8000
+    },
+    {
+      "name": "음식물쓰레기봉투-10매 3L",
+      "amount": 1400,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 1400
+    },
+    {
+      "name": "서울목장우유 1000ml",
+      "amount": 3980,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 3980
+    },
+    {
+      "name": "해태/봉봉애사비소다 500ml",
+      "amount": 990,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 990
+    },
+    {
+      "name": "오뚜기순후추병 20g",
+      "amount": 1980,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 1980
+    },
+    {
+      "name": "백설/김밥단무지 370g",
+      "amount": 2480,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2480
+    },
+    {
+      "name": "비비고김밥김 20g",
+      "amount": 2980,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2980
+    }
+  ]
+}

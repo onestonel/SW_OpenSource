@@ -1,0 +1,41 @@
+{
+  "store_name": "금촌농협로컬푸드직매장",
+  "total_amount": 25110,
+  "items": [
+    {
+      "name": "초당두부550g 550g",
+      "amount": 2980,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2980
+    },
+    {
+      "name": "서울우유 1L 1L",
+      "amount": 2980,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2980
+    },
+    {
+      "name": "자연란(특란) 30구/국산 판",
+      "amount": 8500,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 8500
+    },
+    {
+      "name": "사과",
+      "amount": 7900,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 7900
+    },
+    {
+      "name": "구운김밥김 20g*100",
+      "amount": 2750,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2750
+    }
+  ]
+}

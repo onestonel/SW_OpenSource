@@ -90,6 +90,8 @@ class ParseRules:
     discount_keywords: tuple[str, ...] = ("할인", "DC", "쿠폰", "에누리")
     # 금액 뒤에 찍는 과세 표시 ('32,990 T' '27,980T'). 줄 끝 금액 자리에서만 뗀다. 창고형 마트 형식 (4회차)
     tax_marks: tuple[str, ...] = ("T",)
+    # 면세 물품 금액 줄. 세금 줄(공급가 + 부가세) 바로 위에 있으면 그 금액도 세금 합에 더한다 (면세 + 과세 + 부가세 = 합계)
+    tax_free_keywords: tuple[str, ...] = ("면세",)
     # 숫자 자리에 자주 섞여 들어오는 비슷한 글자 (OCR이 0을 O로 읽는 등). 숫자가 반 이상인 낱말에만 쓴다
     digit_fixes: dict[str, str] = field(
         default_factory=lambda: {
@@ -454,6 +456,31 @@ def _read_columns(lines: list[Line], rules: ParseRules) -> list[Line]:
     return out
 
 
+def _tax_lines(
+    lines: list[Line], split: list[tuple[str, list[int]]], roles: list[str], rules: ParseRules
+) -> tuple[list[int], int | None]:
+    """공급가 + 부가세(공급가의 10% ± 1원) 짝 줄을 산수로 찾는다. (세금 줄 번호들, 세금 합)
+
+    낱말을 잘못 읽어도('관세 매출 6,436' + '분가세 644') 찾을 수 있다. 가격 줄과 헷갈리지 않게 공급가는 100원 단위로
+    떨어지지 않는 금액만 본다 (공급가 = 합계 ÷ 1.1이라 대개 끝자리가 남는다. 20,000원 + 2,000원 같은 가격 줄은 거른다).
+    """
+    for i, (_, nums) in enumerate(split):
+        if roles[i] == "header" or len(nums) != 1 or nums[0] <= 0 or nums[0] % 100 == 0:
+            continue
+        supply = nums[0]
+        for j in range(i + 1, min(i + 3, len(lines))):
+            vat = split[j][1]
+            if len(vat) == 1 and vat[0] >= rules.min_amount and abs(vat[0] * 10 - supply) <= 10:
+                block, total = [i, j], supply + vat[0]
+                for k in range(i - 1, max(i - 4, -1), -1):  # 면세 줄은 과세 줄 바로 위에 찍힌다
+                    if split[k][1] and _has(lines[k].text, rules.tax_free_keywords):
+                        block.append(k)
+                        total += split[k][1][-1]
+                        break
+                return sorted(block), total
+    return [], None
+
+
 def _cell_quantity(unit: int | None, qty: int | None, amount: int, rules: ParseRules) -> tuple[int | None, int | None]:
     """표에서 읽은 단가 · 수량 중 빈 칸을 금액으로 채운다. (수량, 단가)"""
     if qty is None and unit and amount % unit == 0 and 0 < amount // unit <= rules.max_quantity:
@@ -541,10 +568,22 @@ def parse_receipt(lines: list[Line], rules: ParseRules | None = None) -> ParsedR
         if roles[i] == "other" and has_amount and any(_has(ln.text, g) for g in rules.total_keywords):
             roles[i] = "total" if i == total_idx else "subtotal"
 
+    # 세금 줄(면세 · 과세 · 부가세)은 낱말을 잘못 읽어도 품목이 아니다
+    tax_idx, tax_total = _tax_lines(lines, split, roles, rules)
+    for k in tax_idx:
+        if roles[k] == "other":
+            roles[k] = "ignored"
+    if total is None:  # 합계 낱말을 못 읽었으면 세금 합(면세 + 과세 + 부가세)이 합계다
+        total = tax_total
+
     # 품목: 머리줄 아래 ~ 첫 합계 줄 위. 할인은 합계 줄 사이에 오는 경우가 많아 결제금액 줄 위까지 본다
     header_idx = next((i for i, r in enumerate(roles) if r == "header"), None)
     first_total = next((i for i, r in enumerate(roles) if r in ("total", "subtotal")), len(lines))
     last = total_idx if total_idx is not None else len(lines)
+    if tax_idx:  # 세금 줄 아래도 품목이 아니다 (합계 낱말을 못 읽은 영수증에서는 이것이 품목 구간의 끝)
+        first_total = min(first_total, tax_idx[0])
+        if total_idx is None:
+            last = tax_idx[0]
     found: list[tuple[int, ParsedItem]] = []
     for i in range(header_idx + 1 if header_idx is not None else 0, last):
         name, nums = split[i]

@@ -68,6 +68,7 @@ cd server
 | 표의 열 이름 | `ParseRules.column_keywords` | 머리줄에 '판매가'를 쓰는 영수증이면 `"unit": ("단가", "판매가")` |
 | 숫자 자리 오인식 고치기 | `ParseRules.digit_fixes` | OCR이 5를 S로 읽으면 `"S": "5"` |
 | 금액 뒤 과세 표시 | `ParseRules.tax_marks` | 기본 `("T",)` (`32,990 T`). 다른 표시를 찍는 영수증이면 더하기 |
+| 세금 줄로 합계 찾기 | `parser._tax_lines`, `ParseRules.tax_free_keywords` | 공급가 + 부가세(10%) 짝 줄을 산수로 찾아 품목에서 빼고, 합계 낱말이 없으면 면세 + 과세 + 부가세를 합계로 |
 | 사진 키우기 · 명암 · 흑백 | `preprocess.PreprocessOptions` | `min_width=1400`(기본, dev 비교로 정함), `threshold=150` |
 | 전처리 단계 켜기 | `PreprocessOptions(crop, target_width, flatten, deskew, adaptive_threshold)` | 2회차 Ablation 결과로 기본은 모두 끔 ([보고서](../../../docs/ocr-report.md)) |
 | 엔진 설정 | 명령의 `--engine 이름:설정=값,...` | `tesseract:lang=kor_best`, `easyocr:width_ths=0.1`, `paddleocr:unwarp=true,words=true` |
@@ -89,7 +90,8 @@ cd server
 
 ## 지금 한계
 
-- 평가 데이터 33장 중 12장이 **가짜 영수증**(`synth.py`)이고 진짜 사진은 21장(dev 14 · test 7)입니다. 가짜가 훨씬 쉬우니 점수는 둘을 나눠서 봅니다(보고서).
+- 평가 데이터 38장 중 12장이 **가짜 영수증**(`synth.py`)이고 진짜 사진은 26장(dev 15 · test 11)입니다. 가짜가 훨씬 쉬우니 점수는 둘을 나눠서 봅니다(보고서).
+- 진짜 사진의 번호는 저장소 밖에 둔 원본 사진의 번호와 다를 수 있습니다(사진을 21장으로 늘릴 때 dev · test 나누기를 바꿈). 원본에서 다시 만들어 덮어쓰면 가리기가 풀리고 정답과 어긋나니, 사진을 고칠 때는 `samples/`의 파일을 직접 고칩니다.
 - 영역 자르기 · 기울기 보정은 있지만 기본으로 꺼져 있습니다 (진짜 사진 14장으로 비교해도 점수가 오르지 않음, 보고서 2회차). 말린 종이 펴기는 PaddleOCR의 `unwarp` 설정뿐입니다.
 - 엔진 비교(보고서 3회차)에서는 PaddleOCR(`paddleocr:unwarp=true` + 최소 전처리)이 가장 좋았지만(진짜 사진 품목 F1 dev 0.72 · test 0.68, Tesseract는 0.44 · 0.42),
   별도 가상환경이 필요해서 서버(`OCR_ENGINE`, API의 `engine`)에는 아직 넣지 않았습니다.
