@@ -38,6 +38,7 @@ def test_recognize_uploaded_photo(client, api):
     body = res.json()
     assert body["draft"]["store_name"] == "같이고기 경기대점"
     assert body["draft"]["total_amount"] == 93000
+    assert [i["name"] for i in body["draft"]["items"]] == ["삼겹살", "목살", "된장찌개", "맥주", "제휴할인"]
     assert body["draft"]["items"][-1] == {"name": "제휴할인", "amount": -5000, "kind": "DISCOUNT"}
     assert body["check"] == {"items_sum": 93000, "difference": 0, "is_matched": True}
     assert body["engine"] == "stub"
