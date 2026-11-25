@@ -160,6 +160,8 @@ class Item:
 class RoomData:
     members: list[tuple[int, str]]  # (id, 이름), 구성원 순서
     items: list[Item]
+    # 영수증별 '총액 − 품목 합' (할인 · 차액). 정산에서 그 영수증 참여자끼리 나눈다
+    extra: dict[int, int] = field(default_factory=dict)
     names: dict[int, str] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -323,6 +325,16 @@ def menu_question(text: str, room: RoomData) -> str | None:
     return f"{word + ' 메뉴가 무엇인가요' if word else '어떤 메뉴인가요'}? 알려 주시면 {who} 그 메뉴에서 뺄게요."
 
 
+def _item_names_in(text: str, room: RoomData) -> set[str]:
+    """문장에 나온 품목 이름. 긴 이름부터 찾고 지워서, '아이스커피'만 말하면 그 안의 '커피'는 나온 것으로 보지 않는다."""
+    left, found = text, set()
+    for name in sorted({it.name for it in room.items}, key=len, reverse=True):
+        if name in left:
+            found.add(name)
+            left = left.replace(name, "\0")
+    return found
+
+
 ONLY = re.compile(r"(만|끼리)\s*(먹|마시|마셨|탔|타|했|하|썼|쓰|갔|가|샀|사|시켰|이용|$)")
 NOT = ("안 ", "안먹", "안마", "안탔", "안 탔", "빼고", "빼줘", "빼 줘", "제외", "못 ")
 
@@ -337,10 +349,11 @@ def _repair(p: dict, text: str, room: RoomData, used: set[int]) -> tuple[dict, l
     p = {**p, "params": dict(p.get("params") or {})}
     fixed: list[str] = []  # 무엇을 고쳤는지 (기록 · 집계용)
     items = {it.id: it for it in room.items}
-    named_items = [it.id for it in room.items if it.name in text and it.id not in used]
+    said = _item_names_in(text, room)
+    named_items = [it.id for it in room.items if it.name in said and it.id not in used]
     named_people = [i for i, n in room.members if n in text]
     item = p.get("receipt_item_id")
-    if (item not in items or items[item].name not in text) and len(named_items) == 1:
+    if (item not in items or items[item].name not in said) and len(named_items) == 1:
         p["receipt_item_id"] = named_items[0]
         fixed.append("품목")
     t = p.get("type")
@@ -397,6 +410,7 @@ def validate(raw: str, text: str, room: RoomData) -> Checked:
 def _check_parsed(result: dict, text: str, room: RoomData, repairs: list[str]) -> Checked:
     items = {it.id: it for it in room.items}
     member_ids = [i for i, _ in room.members]
+    said = _item_names_in(text, room)
     merged: dict[int, dict] = {}
     for p in result.get("proposals") or []:
         if not isinstance(p, dict):
@@ -430,7 +444,7 @@ def _check_parsed(result: dict, text: str, room: RoomData, repairs: list[str]) -
     if len(rules) == 1 and next(iter(rules))[0] in CHECKABLE:
         one = next(iter(merged.values()))
         for it in room.items:
-            if it.name in text and it.id not in merged:
+            if it.name in said and it.id not in merged:
                 merged[it.id] = {**one, "receipt_item_id": it.id, "params": dict(one["params"])}
                 repairs.append("빠진 품목 추가")
 
@@ -446,7 +460,7 @@ def _check_parsed(result: dict, text: str, room: RoomData, repairs: list[str]) -
         # 문장에 없는 사람 · 품목을 모델이 지어내면 다시 묻는다
         if any(room.names[i] not in text for i in ids):
             return _clarify("문장에 나온 사람을 찾지 못했어요. 구성원 이름을 그대로 써 주세요.")
-        if items[item].name not in text:
+        if items[item].name not in said:
             q = menu_question(text, room)
             return _clarify(q, follow_up=True) if q else _clarify(
                 "문장에 나온 품목을 찾지 못했어요. 체크 표의 품목 이름을 그대로 써 주세요.")
@@ -487,6 +501,22 @@ def _paid_change(it: Item, paid_ids: list[int], room: RoomData) -> tuple[dict | 
     return {"before_amount": it.amount, "after_amount": after_amount, "after_member_ids": left, "note": note}, None
 
 
+def _paid_moves_extra(changes: list[dict], room: RoomData) -> str | None:
+    """이미 보냄은 품목 금액을 줄이고 결제자 · 보낸 사람을 뺀다. 그래서 그 사람들이 영수증의 모든 품목에서 빠지면
+    할인 · 차액(총액 − 품목 합)을 남은 사람끼리만 나누게 된다. 그런 영수증이면 막는다. (막힌 이유, 아니면 None)"""
+    paid = {c["item_id"]: c["after_member_ids"] for c in changes if c["rule"] == "PAID"}
+    for rid in dict.fromkeys(c["receipt_id"] for c in changes if c["rule"] == "PAID"):
+        if not room.extra.get(rid):
+            continue
+        its = [it for it in room.items if it.receipt_id == rid]
+        before = {m for it in its for m in it.member_ids}
+        after = {m for it in its for m in paid.get(it.id, it.member_ids)}
+        if after != before:
+            return (f"'{its[0].store_name}' 영수증에는 할인이나 품목 합과 총액의 차이가 있어서, 이미 보낸 돈을 빼면 "
+                    "그 금액을 남은 사람끼리만 나누게 돼요. 이 영수증은 아직 '이미 보냄'을 반영할 수 없어요.")
+    return None
+
+
 def to_changes(checked: Checked, room: RoomData) -> tuple[str, str, list[dict]]:
     """검사를 통과한 규칙을 '품목마다 누가 내는지(+ 금액)' 변경안으로 바꾼다. (status, message, changes)"""
     if checked.status != "PARSED":
@@ -519,6 +549,9 @@ def to_changes(checked: Checked, room: RoomData) -> tuple[str, str, list[dict]]:
         changes.append({"item_id": it.id, "receipt_id": it.receipt_id, "store_name": it.store_name,
                         "name": it.name, "rule": t, "evidence": p.get("evidence"),
                         "before_member_ids": before, "after_member_ids": after, **extra})
+    blocked = _paid_moves_extra(changes, room)
+    if blocked:
+        return "PARSED", blocked, []
     if not changes:
         return "PARSED", "이미 체크 표에 그렇게 되어 있어요. 바꿀 것이 없습니다.", []
     return "PARSED", "이렇게 바꿀까요?", changes
@@ -529,24 +562,34 @@ def interpret(room: RoomData, text: str, previous: str | None = None) -> dict[st
     full = f"{previous.strip()} {text.strip()}" if previous and previous.strip() else text.strip()
     start = time.perf_counter()
     provider = settings.nl_provider
+    small_down = False
     try:
         raw = call_model(room, full)
         checked = validate(raw, full, room)
     except AppError:
         if not fallback_enabled():
             raise
+        small_down = True
         raw, checked = "(작은 모델에 연결하지 못함)", _clarify()
     log.info("문장 해석 provider=%s text=%r raw=%s", provider, full, raw)
     # 작은 모델 답이 서버 검사에서 걸렸으면(빠진 것을 묻는 진짜 질문이 아닌 다시 묻기) 큰 모델에 한 번 더 묻는다
     if fallback_enabled() and checked.status == "NEEDS_CLARIFICATION" and not checked.follow_up:
         small = checked
-        raw2 = call_fallback(room, full)
-        log.info("문장 해석 provider=openai(%s) text=%r raw=%s", settings.nl_fallback_model, full, raw2)
-        checked = validate(raw2, full, room)
-        checked.repairs = [*small.repairs, "큰 모델로 넘김", *checked.repairs]
-        checked.model_rules = small.model_rules  # 규칙 표는 기본 모델이 고른 것 × 최종 (넘겨서 고친 것이 보이게)
-        raw = f"{raw}\n--- {settings.nl_fallback_model} ---\n{raw2}"
-        provider = f"{provider}→openai"
+        try:
+            raw2 = call_fallback(room, full)
+        except AppError:
+            if small_down:
+                raise  # 두 모델 모두 연결하지 못함 → 503
+            # 큰 모델이 안 되면 작은 모델의 다시 묻기를 그대로 돌려준다 (503이면 AI 총무 전체가 꺼진 것처럼 보인다)
+            log.warning("큰 모델에 연결하지 못해 작은 모델 답을 그대로 씀 text=%r", full)
+            checked.repairs = [*checked.repairs, "큰 모델 연결 실패"]
+        else:
+            log.info("문장 해석 provider=openai(%s) text=%r raw=%s", settings.nl_fallback_model, full, raw2)
+            checked = validate(raw2, full, room)
+            checked.repairs = [*small.repairs, "큰 모델로 넘김", *checked.repairs]
+            checked.model_rules = small.model_rules  # 규칙 표는 기본 모델이 고른 것 × 최종 (넘겨서 고친 것이 보이게)
+            raw = f"{raw}\n--- {settings.nl_fallback_model} ---\n{raw2}"
+            provider = f"{provider}→openai"
     elapsed_ms = int((time.perf_counter() - start) * 1000)
     status, message, changes = to_changes(checked, room)
     trace = {"raw": raw, "model_rules": checked.model_rules, "repairs": checked.repairs,
