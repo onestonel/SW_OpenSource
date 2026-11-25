@@ -401,7 +401,7 @@ def test_rereads_only_when_text_column_read_vertically(column, calls):
     # 세로로 긴 상자(높이 > 폭 × 2, 3글자 이상)가 있을 때만 한 번 더 읽고, 다시 읽은 결과로 초안을 만든다
     from io import BytesIO
 
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     photo = BytesIO()
     Image.new("RGB", (40, 40), "white").save(photo, "PNG")
