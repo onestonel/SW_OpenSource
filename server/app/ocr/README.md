@@ -98,4 +98,4 @@ cd server
 - 엔진 비교(보고서 3회차)에서는 PaddleOCR(`paddleocr:unwarp=true` + 최소 전처리)이 가장 좋았지만(진짜 사진 품목 F1 dev 0.72 · test 0.68, Tesseract는 0.44 · 0.42),
   별도 가상환경이 필요해서 서버(`OCR_ENGINE`, API의 `engine`)에는 아직 넣지 않았습니다.
 - 품목의 수량은 `lines`에만 있고 초안에는 없습니다 (약속서 품목 칸에 수량이 없어서).
-- 요청 안에서 OCR을 기다립니다 (폰 사진 기준 Tesseract 약 1초, PaddleOCR 약 10초). V2에서는 Worker로 옮깁니다.
+- 요청 안에서 OCR을 기다립니다 (폰 사진 기준 Tesseract 약 1초, PaddleOCR 평균 15.5초 · 가장 느린 장 26.5초, 6회차 test). V2에서는 Worker로 옮깁니다.
