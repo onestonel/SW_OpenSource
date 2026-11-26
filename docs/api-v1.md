@@ -313,22 +313,26 @@
   - `UNSUPPORTED`: 정산과 관계없는 문장, 또는 비율 · 수량으로 나누기 (V1 정산은 "체크한 사람끼리 똑같이"만 계산하므로)
 - `rule`: `EXCLUDE` ~빼고 · `FULL` ~가 다 낼게 · `EQUAL` ~끼리만 · `PAID` ~는 이미 보냈어. `EXCLUDE`는 지금 체크된 사람에서 뺍니다
 - `PAID`는 금액이 바뀝니다. AI는 누가 보냈는지만 알아듣고, 남은 금액은 서버가 계산합니다. 결제자와 이미 보낸 사람의 몫을 빼고 아직 안 보낸 사람 몫만 남기며(`after_amount`), 아직 안 보낸 사람만 체크합니다. `note`에 무엇을 바꾸는지 설명하는 문장이 들어 있습니다
+  - 할인 줄이 있거나 품목 합과 총액이 다른 영수증에서, 결제자나 이미 보낸 사람이 그 영수증의 모든 품목에서 빠지게 되면 반영하지 않습니다(`changes`가 비고 `message`가 이유를 알려 줍니다). 그대로 반영하면 할인 · 차액을 남은 사람끼리만 나누게 되기 때문입니다
+- 품목 이름은 긴 것부터 찾습니다. "아이스커피"만 말하면 그 안에 들어 있는 "커피"는 문장에 나온 것으로 보지 않습니다
 - 답장의 `text`는 해석한 문장 전체(`previous` + `text`)입니다
 - 답장의 `follow_up`이 `true`이면 AI가 빠진 것(메뉴, 사람)을 물은 것이라, 프론트엔드는 사용자의 다음 말을 `previous`와 함께 보냅니다. `false`인 다시 묻기("조금 더 구체적으로 말해 주세요")는 다음 말을 새 문장으로 보냅니다
 - 같은 품목에 '이미 보냄'과 그 결과("민수만")가 함께 나오면 '이미 보냄' 하나로 합칩니다. 서로 다른 규칙이 둘이면 다시 묻습니다
 - `provider`: `stub`(모델 없이 간단한 규칙으로 흉내) 또는 `llama`(llama.cpp · EXAONE 3.5 2.4B). `.env`의 `NL_PROVIDER`로 고릅니다
-- **큰 모델로 넘기기**: `.env`에 `OPENAI_API_KEY`가 있으면, 작은 모델 답이 서버 검사에서 걸렸을 때(빠진 것을 묻는 진짜 질문이 아닌 다시 묻기)나 llm 컨테이너에 연결하지 못했을 때만 같은 프롬프트 · 같은 출력 모양으로 GPT(`NL_FALLBACK_MODEL`, 기본 `gpt-4.1-mini`)에 한 번 더 묻습니다. 이때 `provider`는 `llama→openai`입니다. 넘길 때는 구성원 이름 · 품목 · 금액이 외부로 나갑니다
-- 확정된 영수증이 없으면 `409 NO_CHECK_ITEMS`, 해석기(llm 컨테이너)에 연결하지 못하면 `503 NL_UNAVAILABLE`
+- **큰 모델로 넘기기**: `.env`에 `OPENAI_API_KEY`가 있으면, 작은 모델 답이 서버 검사에서 걸렸을 때(빠진 것을 묻는 진짜 질문이 아닌 다시 묻기)나 llm 컨테이너에 연결하지 못했을 때만 같은 프롬프트 · 같은 출력 모양으로 GPT(`NL_FALLBACK_MODEL`, 기본 `gpt-4.1-mini`)에 한 번 더 묻습니다. 이때 `provider`는 `llama→openai`입니다. 넘길 때는 구성원 이름 · 품목 · 금액이 외부로 나갑니다. GPT에 연결하지 못하면 작은 모델의 다시 묻기를 그대로 돌려줍니다
+- 확정된 영수증이 없으면 `409 NO_CHECK_ITEMS`, 해석기에 연결하지 못하면(큰 모델로 넘기기를 켰으면 두 모델 모두) `503 NL_UNAVAILABLE`
 - 프롬프트 · 출력 JSON schema · 서버 검사는 `llm/bench.py`(PR #13)와 같습니다
 
 ### 말로 바꾸기 — 변경안 적용 `POST /rooms/{room_token}/checks/apply`
 
 프론트엔드가 변경안의 「반영」을 누르면 이 주소로 보내고, 백엔드는 바로 저장합니다.
 ```json
-{ "changes": [ { "item_id": 7, "member_ids": [1], "amount": 100000 } ] }
+{ "changes": [ { "item_id": 7, "member_ids": [1], "amount": 100000 } ], "interpretation_id": 12 }
 ```
-- `member_ids`는 변경안의 `after_member_ids`, `amount`는 금액이 바뀌는 경우(`PAID`)에만 `after_amount`를 넣습니다
+- `member_ids`는 변경안의 `after_member_ids`, `amount`는 금액이 바뀌는 경우(`PAID`)에만 `after_amount`를 넣습니다. `interpretation_id`는 「말로 바꾸기」 답장의 `interpretation_id`입니다
 - 체크 검사는 「체크 표 저장」과 같습니다. `amount`는 지금 금액보다 크면 `422 VALIDATION_ERROR`입니다(줄이기만 됩니다)
+- `amount`는 `interpretation_id`의 변경안에 있는 `after_amount`와 같을 때만 받습니다. 아니면 `422 VALIDATION_ERROR`입니다(남은 금액은 서버가 계산한 값만 씁니다)
+- 변경안을 만든 뒤에 그 품목의 금액이나 체크가 바뀌었으면 `409 CHANGE_OUTDATED`입니다. 다시 말해서 새 변경안을 받으면 됩니다
 - 금액을 줄이면 그 영수증의 총액도 같은 만큼 줄어듭니다. 영수증은 확정 상태 그대로입니다
 - 성공하면 체크 표 전체를 돌려주고, 최신 정산을 '최신 아님'으로 만듭니다
 

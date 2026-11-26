@@ -241,8 +241,17 @@ def lodging(api, room) -> dict:
     return api.post(f"/rooms/{room['room_token']}/receipts/{r['id']}/confirm", expect=200).json()
 
 
-def apply(api, room, changes, expect=200):
-    return api.post(f"/rooms/{room['room_token']}/checks/apply", {"changes": changes}, expect=expect)
+def apply(api, room, changes, expect=200, interpretation_id=None):
+    body = {"changes": changes, "interpretation_id": interpretation_id}
+    return api.post(f"/rooms/{room['room_token']}/checks/apply", body, expect=expect)
+
+
+def apply_all(api, room, got, expect=200):
+    """변경안을 화면처럼 반영한다 (금액은 바뀔 때만, 해석 기록 번호와 같이)."""
+    changes = [{"item_id": c["item_id"], "member_ids": c["after_member_ids"],
+                **({"amount": c["after_amount"]} if c["after_amount"] != c["before_amount"] else {})}
+               for c in got["changes"]]
+    return apply(api, room, changes, expect, got["interpretation_id"])
 
 
 def test_paid_leaves_only_unpaid_share_computed_by_server(api, room, lodging, monkeypatch):
@@ -258,7 +267,7 @@ def test_paid_leaves_only_unpaid_share_computed_by_server(api, room, lodging, mo
     assert change["note"] == ("현우, 수아는 이미 지영에게 보냈으니, 숙소비 400,000원 중 민수 몫 100,000원만 남기고 "
                               "민수만 체크할게요.")
 
-    apply(api, room, [{"item_id": item, "member_ids": change["after_member_ids"], "amount": change["after_amount"]}])
+    apply_all(api, room, got)
     receipt = api.get(f"/rooms/{room['room_token']}/receipts/{lodging['id']}").json()
     assert receipt["total_amount"] == 100000 and receipt["items"][0]["amount"] == 100000
     assert receipt["status"] == "CONFIRMED"
@@ -288,6 +297,64 @@ def test_apply_cannot_raise_amount(api, room, lodging):
     item = lodging["items"][0]["id"]
     res = apply(api, room, [{"item_id": item, "member_ids": [ids(room)[0]], "amount": 500000}], expect=422)
     assert error(res)["code"] == "VALIDATION_ERROR"
+
+
+def confirmed(api, room, body) -> dict:
+    r = api.post(f"/rooms/{room['room_token']}/receipts", body).json()
+    return api.post(f"/rooms/{room['room_token']}/receipts/{r['id']}/confirm", expect=200).json()
+
+
+def test_apply_amount_must_come_from_interpretation(api, room, lodging, monkeypatch):
+    """금액은 서버가 계산한 변경안 그대로만 바꾼다. 해석 없이 보내거나 다른 숫자를 보내면 422."""
+    a, b, c, d = ids(room)
+    item = lodging["items"][0]["id"]
+    res = apply(api, room, [{"item_id": item, "member_ids": [a], "amount": 1}], expect=422)
+    assert error(res)["details"]["fields"] == {"changes.0.amount": "AI 총무 변경안의 금액이 아닙니다"}
+    model_says(monkeypatch, parsed({"receipt_item_id": item, "type": "PAID", "params": {"member_ids": [c, d]}}))
+    got = ask(api, room, "현우랑 수아는 숙소비 보냈어").json()
+    apply(api, room, [{"item_id": item, "member_ids": [a], "amount": 1}], expect=422,
+          interpretation_id=got["interpretation_id"])
+    assert api.get(f"/rooms/{room['room_token']}/receipts/{lodging['id']}").json()["total_amount"] == 400000
+
+
+def test_apply_outdated_paid_change_is_409(api, room, lodging, monkeypatch):
+    """같은 체크 표로 만든 변경안 두 개를 차례로 반영하면, 두 번째는 바뀌기 전 금액 · 체크로 계산한 것이라 409."""
+    a, b, c, d = ids(room)  # 지영(b)이 결제
+    item = lodging["items"][0]["id"]
+    model_says(monkeypatch, parsed({"receipt_item_id": item, "type": "PAID", "params": {"member_ids": [c]}}))
+    first = ask(api, room, "현우는 숙소비 보냈어").json()
+    model_says(monkeypatch, parsed({"receipt_item_id": item, "type": "PAID", "params": {"member_ids": [d]}}))
+    second = ask(api, room, "수아는 숙소비 보냈어").json()
+    # 남은 금액이 우연히 같아도(200,000) 막아야 한다. 아니면 수아가 다시 체크된다
+    assert first["changes"][0]["after_amount"] == second["changes"][0]["after_amount"] == 200000
+    apply_all(api, room, first)
+    assert error(apply_all(api, room, second, expect=409))["code"] == "CHANGE_OUTDATED"
+
+
+def test_paid_is_blocked_when_discount_would_go_to_others(api, room, monkeypatch):
+    """숙소 300,000 − 쿠폰 20,000 (1인 70,000). 지영 · 현우가 보냈다고 빼면 쿠폰을 수아 혼자 받게 되므로 막는다."""
+    a, b, c, d = ids(room)
+    r = confirmed(api, room, {"store_name": "숙소", "payer_member_id": a, "total_amount": 280000,
+                              "items": [{"name": "숙소비", "amount": 300000},
+                                        {"name": "쿠폰", "amount": -20000, "kind": "DISCOUNT"}]})
+    model_says(monkeypatch, parsed({"receipt_item_id": item_id(r, "숙소비"), "type": "PAID",
+                                    "params": {"member_ids": [b, c]}}))
+    got = ask(api, room, "지영이랑 현우는 숙소비 보냈어").json()
+    assert got["changes"] == [] and "할인이나 품목 합과 총액의 차이" in got["message"]
+
+
+def test_paid_is_allowed_when_discount_split_stays(api, room, receipt, monkeypatch):
+    """보낸 사람이 같은 영수증의 다른 품목에 남아 있으면 쿠폰을 나누는 사람이 그대로라서 정산이 맞다."""
+    a, b, c, d = ids(room)  # 민수(결제) · 지영 · 현우 · 수아. 115,000 ÷ 4 = 1인 28,750
+    model_says(monkeypatch, parsed({"receipt_item_id": item_id(receipt, "소주"), "type": "PAID",
+                                    "params": {"member_ids": [b]}}))
+    got = ask(api, room, "지영은 소주값 보냈어").json()
+    assert [(ch["after_member_ids"], ch["after_amount"]) for ch in got["changes"]] == [([c, d], 20000)]
+    apply_all(api, room, got)
+    s = api.post(f"/rooms/{room['room_token']}/settlements").json()
+    # 지영은 소주 몫 10,000원을 이미 보냈으니 18,750원만
+    assert [(t["from"]["name"], t["amount"]) for t in s["transfers"]] == [("지영", 18750), ("현우", 28750),
+                                                                         ("수아", 28750)]
 
 
 def test_apply_checks_only_and_marks_stale(api, room, receipt):
@@ -585,11 +652,22 @@ def test_escalates_when_small_model_is_down(api, room, receipt, monkeypatch, wit
     assert got["status"] == "PARSED" and got["provider"] == "llama→openai"
 
 
-def test_big_model_down_is_503(api, room, receipt, monkeypatch, with_key):
+def test_big_model_down_keeps_small_model_answer(api, db, room, receipt, monkeypatch, with_key):
+    """작은 모델은 답했는데 큰 모델만 안 되면, 503 대신 작은 모델의 다시 묻기를 그대로 돌려준다."""
     model_says(monkeypatch, "JSON 아님")
 
     def down(room_, text):
         raise nl.AppError(503, "NL_UNAVAILABLE", "x")
+    monkeypatch.setattr(nl, "call_fallback", down)
+    got = ask(api, room, "수아는 소주 안 마셨어").json()
+    assert got["status"] == "NEEDS_CLARIFICATION" and got["provider"] == "llama"
+    assert "큰 모델 연결 실패" in logs(db)[0].repairs
+
+
+def test_both_models_down_is_503(api, room, receipt, monkeypatch, with_key):
+    def down(room_, text):
+        raise nl.AppError(503, "NL_UNAVAILABLE", "x")
+    monkeypatch.setattr(nl, "call_model", down)
     monkeypatch.setattr(nl, "call_fallback", down)
     assert error(ask(api, room, "수아는 소주 안 마셨어", expect=503))["code"] == "NL_UNAVAILABLE"
 
@@ -632,3 +710,19 @@ def test_different_rules_do_not_spread(api, room, receipt, monkeypatch):
                                    {"receipt_item_id": item_id(receipt, "삼겹살"), "type": "FULL", "params": {"member_id": a}}))
     got = ask(api, room, "수아는 소주 안 마셨고 삼겹살은 민수가 다 낼게").json()
     assert sorted(ch["name"] for ch in got["changes"]) == ["삼겹살", "소주"]
+
+
+def test_item_inside_longer_name_is_not_changed(api, room, monkeypatch):
+    """'아이스커피'만 말했으면 이름이 그 안에 들어 있는 '커피'는 바꾸지 않는다 (빠진 품목 추가 · 품목 고치기 모두)."""
+    d = ids(room)[3]
+    r = confirmed(api, room, {"store_name": "카페", "payer_member_id": ids(room)[0], "total_amount": 9000,
+                              "items": [{"name": "커피", "amount": 4000}, {"name": "아이스커피", "amount": 5000}]})
+
+    def names(item, text):
+        model_says(monkeypatch, parsed({"receipt_item_id": item_id(r, item), "type": "EXCLUDE",
+                                        "params": {"member_ids": [d]}}))
+        return sorted(ch["name"] for ch in ask(api, room, text).json()["changes"])
+
+    assert names("아이스커피", "수아는 아이스커피 안 마셨어") == ["아이스커피"]
+    assert names("커피", "수아는 아이스커피 안 마셨어") == ["아이스커피"]  # 모델이 짧은 이름을 골라도 문장대로
+    assert names("커피", "수아는 커피랑 아이스커피 안 마셨어") == ["아이스커피", "커피"]

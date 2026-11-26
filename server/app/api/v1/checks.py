@@ -125,12 +125,16 @@ def interpret_checks(body: InterpretIn, room: CurrentRoom, db: DB) -> InterpretO
     checks = _checks_out(db, room)
     if not checks.items:
         raise AppError(409, "NO_CHECK_ITEMS", "확정된 영수증이 없어서 바꿀 품목이 없습니다. 영수증을 먼저 확정해 주세요.")
-    payer_of = dict(db.execute(select(Receipt.id, Receipt.payer_member_id).where(Receipt.room_id == room.id)).all())
+    rows = db.execute(select(Receipt.id, Receipt.payer_member_id, Receipt.total_amount)
+                      .where(Receipt.room_id == room.id)).all()
+    payer_of = {rid: payer for rid, payer, _ in rows}
     data = nl.RoomData(
         members=[(m.id, m.name) for m in checks.members],
         items=[nl.Item(id=i.item_id, name=i.name, amount=i.amount, receipt_id=i.receipt_id,
                        store_name=i.store_name, member_ids=list(i.member_ids), payer_id=payer_of[i.receipt_id])
                for i in checks.items],
+        # 할인 · 차액이 있는 영수증은 이미 보냄을 반영하면 틀릴 수 있어서, 서버가 막을지 판단할 때 쓴다
+        extra={rid: total - sum(i.amount for i in checks.items if i.receipt_id == rid) for rid, _, total in rows},
     )
     res = nl.interpret(data, body.text, body.previous)
     trace = res.pop("trace")
@@ -166,18 +170,36 @@ def apply_changes(body: ApplyIn, room: CurrentRoom, db: DB) -> ChecksOut:
     `interpret`가 준 변경안을 저장한다. 체크는 `PUT /checks`와 같고, `amount`가 있으면 품목 금액도 바꾼다.
 
     - `amount`는 이미 보낸 돈을 뺀 남은 금액(PAID)이라서 **줄이기만** 된다. 늘리면 `422 VALIDATION_ERROR`
+    - 금액은 `interpretation_id`의 변경안과 같은 값일 때만 바꾼다 (아니면 `422 VALIDATION_ERROR`).
+      변경안을 만든 뒤에 그 품목의 금액이나 체크가 바뀌었으면 `409 CHANGE_OUTDATED`
     - 금액을 줄인 만큼 그 영수증의 총액도 같이 줄인다 (영수증은 확정 상태 그대로)
     - 저장하면 최신 정산을 '최신 아님'으로 만든다
     """
     items = _check_lines(db, room, body.changes)  # 줄마다 item_id · member_ids가 있어서 체크 저장과 같이 검사한다
+    entry = db.get(NlLog, body.interpretation_id) if body.interpretation_id is not None else None
+    if entry is not None and entry.room_id != room.id:
+        entry = None
+    proposed = {c["item_id"]: c for c in entry.changes} if entry is not None else {}
     for n, c in enumerate(body.changes):
-        if c.amount is not None and c.amount > items[c.item_id].amount:
+        item = items[c.item_id]
+        if c.amount is None:
+            continue
+        if c.amount > item.amount:
             raise validation_error(f"changes.{n}.amount", "품목 금액보다 클 수 없습니다",
                                    "이미 보낸 돈을 뺀 금액은 지금 금액보다 클 수 없습니다.")
-    if body.interpretation_id is not None:
-        entry = db.get(NlLog, body.interpretation_id)
-        if entry is not None and entry.room_id == room.id:
-            entry.outcome, entry.outcome_at = "APPLIED", utcnow()
+        # 남은 금액은 서버가 계산한 변경안 그대로만 받는다 (화면이 보낸 숫자를 믿지 않는다)
+        p = proposed.get(c.item_id)
+        if p is None or p.get("after_amount") != c.amount:
+            raise validation_error(f"changes.{n}.amount", "AI 총무 변경안의 금액이 아닙니다",
+                                   "금액은 AI 총무가 계산한 변경안으로만 바꿀 수 있습니다.")
+        # 남은 금액은 그때의 금액 · 체크로 계산했으므로, 둘 중 하나라도 바뀌었으면 다시 계산해야 한다
+        if p.get("before_amount") != item.amount or set(p.get("before_member_ids") or []) != {
+                x.member_id for x in item.payers}:
+            raise AppError(409, "CHANGE_OUTDATED",
+                           "변경안을 만든 뒤에 그 품목의 금액이나 체크가 바뀌었습니다. AI 총무에게 다시 말해 주세요.",
+                           {"item_id": c.item_id})
+    if entry is not None:
+        entry.outcome, entry.outcome_at = "APPLIED", utcnow()
     for c in body.changes:
         item = items[c.item_id]
         if c.amount is not None and c.amount != item.amount:
