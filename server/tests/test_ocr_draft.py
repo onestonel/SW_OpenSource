@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from app.ocr_draft import OcrLine, OcrResult, make_draft, parse_amount
+from app.ocr_draft import RawDraft, RawLine, make_draft, parse_amount
 
 
 def ocr(store="1차 식당", total="31,000", lines=(("김치찌개", "9,000"), ("삼겹살", "24,000원"), ("할인", "-2,000"))):
-    return OcrResult(store_name=store, total_amount=total, lines=[OcrLine(n, a) for n, a in lines])
+    return RawDraft(store_name=store, total_amount=total, lines=[RawLine(*line) for line in lines])
 
 
 def rows(draft) -> list[tuple[str, int, str]]:
@@ -70,10 +70,10 @@ def test_missing_total_uses_items_sum_with_discount():
     assert d.notes == ["합계를 읽지 못해 품목 합(31,000원)으로 넣었습니다."]
 
 
-def test_wrong_total_is_kept_but_noted():
+def test_wrong_total_is_kept():
     d = make_draft(ocr(total="33,000"))
     assert d.total_amount == 33000  # 합계를 품목 합으로 바꾸지 않는다 (어느 쪽이 틀렸는지 모른다)
-    assert d.notes == ["합계(33,000원)와 품목 합(31,000원)이 2,000원 다릅니다. 금액을 잘못 읽었을 수 있으니 확인해 주세요."]
+    assert d.notes == []  # 합계 ≠ 품목 합은 OCR 경고와 영수증 check가 이미 알려 준다
 
 
 def test_negative_total_uses_items_sum():
@@ -85,9 +85,29 @@ def test_negative_total_uses_items_sum():
 def test_no_items_is_not_ok():
     d = make_draft(ocr(total=None, lines=[("할인", "-1,000"), ("합계", "abc")]))
     assert not d.ok and d.total_amount is None
-    assert d.notes[-1] == "품목을 하나도 읽지 못했습니다. 직접 입력해 주세요."
-    with pytest.raises(ValueError):
+    assert d.problem == "품목을 하나도 읽지 못해"
+    with pytest.raises(ValueError, match="품목을 하나도 읽지 못해 영수증을 만들 수 없습니다"):
         d.to_receipt_in(payer_member_id=1)
+
+
+def test_no_total_and_no_plus_sum_is_not_ok():
+    d = make_draft(ocr(total=None, lines=[("물", "1,000"), ("할인", "-2,000")]))
+    assert d.total_amount is None and d.problem == "총액을 정하지 못해"
+
+
+def test_kind_from_ocr_is_followed():
+    """OCR이 정한 줄 종류를 따른다. '할인상품'이라는 낱말이 있어도 ITEM이면 품목이다."""
+    d = make_draft(ocr(total="9,000", lines=[("할인상품 우유", "3,000", "ITEM"), ("제휴", "1,000", "DISCOUNT"),
+                                             ("빵", "7,000", None)]))
+    assert rows(d) == [("할인상품 우유", 3000, "ITEM"), ("제휴", -1000, "DISCOUNT"), ("빵", 7000, "ITEM")]
+    assert d.notes == ["'제휴': 할인으로 보고 -1,000원으로 넣었습니다."]
+
+
+def test_missing_store_keeps_existing_name():
+    d = make_draft(ocr(store=None), keep_store="1차 식당")
+    assert d.store_name == "1차 식당"
+    assert d.notes == ["가게 이름을 읽지 못해 원래 이름('1차 식당')을 그대로 두었습니다."]
+    assert make_draft(ocr(store="같이고기"), keep_store="1차 식당").store_name == "같이고기"
 
 
 def test_more_than_100_lines_keeps_first_100():
@@ -98,10 +118,14 @@ def test_more_than_100_lines_keeps_first_100():
 
 
 def test_from_dict():
-    r = OcrResult.from_dict({"store_name": "편의점", "total_amount": 3000,
-                             "items": [{"name": "우유", "amount": "3,000"}]})
-    assert rows(make_draft(r)) == [("우유", 3000, "ITEM")]
-    assert OcrResult.from_dict({}).lines == []
+    """OCR API 답장의 draft 모양 그대로 받는다 (store_name · total_amount는 null일 수 있다)."""
+    r = RawDraft.from_dict({"store_name": None, "total_amount": None,
+                            "items": [{"name": "우유", "amount": 3000, "kind": "ITEM"},
+                                      {"name": "쿠폰", "amount": -500, "kind": "DISCOUNT"}]})
+    d = make_draft(r)
+    assert rows(d) == [("우유", 3000, "ITEM"), ("쿠폰", -500, "DISCOUNT")]
+    assert d.store_name == "영수증" and d.total_amount == 2500
+    assert RawDraft.from_dict({}).lines == []
 
 
 def test_draft_is_saved_as_checking_receipt(api):
