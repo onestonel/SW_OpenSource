@@ -48,3 +48,48 @@ test('검사: 구성원 2명 미만 · 확정 영수증 고치기', async () => 
   await req('POST', `${t}/receipts/${rc.id}/confirm`)
   await assert.rejects(req('PUT', `${t}/receipts/${rc.id}`, body), { status: 409, code: 'RECEIPT_CONFIRMED' })
 })
+
+test('말로 바꾸기: 빼기 · 다 내기 · 다시 묻기 (저장하지 않음)', async () => {
+  const room = await req('POST', '/rooms', { name: '회식', members: ['민수', '지영', '현우', '수아'] })
+  const t = `/rooms/${room.room_token}`
+  const [a, b, c] = room.members.map((m) => m.id)
+  await assert.rejects(req('POST', `${t}/checks/interpret`, { text: '수아는 소주 안 마셨어' }), { status: 409 })
+
+  const rc = await req('POST', `${t}/receipts`, {
+    store_name: '1차', payer_member_id: a, total_amount: 120000,
+    items: [{ name: '삼겹살', amount: 80000, kind: 'ITEM' }, { name: '소주', amount: 40000, kind: 'ITEM' }],
+  })
+  await req('POST', `${t}/receipts/${rc.id}/confirm`)
+
+  const ex = await req('POST', `${t}/checks/interpret`, { text: '수아는 소주 안 마셨어' })
+  assert.equal(ex.status, 'PARSED')
+  assert.deepEqual(ex.changes[0].after_member_ids, [a, b, c])
+  const checks = await req('GET', `${t}/checks`)
+  assert.equal(checks.items[1].member_ids.length, 4) // 저장은 하지 않는다
+
+  const full = await req('POST', `${t}/checks/interpret`, { text: '소주는 지영이가 다 낼게' })
+  assert.deepEqual([full.changes[0].rule, full.changes[0].after_member_ids], ['FULL', [b]])
+
+  assert.equal((await req('POST', `${t}/checks/interpret`, { text: '오늘 재밌었다' })).status, 'NEEDS_CLARIFICATION')
+})
+
+test('AI 총무: 이미 보낸 돈 · 되묻고 이어서 답하기 · 적용', async () => {
+  const room = await req('POST', '/rooms', { name: '여행', members: ['민수', '지영', '현우', '수아'] })
+  const t = `/rooms/${room.room_token}`
+  const [a, b, c] = room.members.map((m) => m.id)
+  const lodging = await req('POST', `${t}/receipts`, { store_name: '숙소', payer_member_id: b, total_amount: 400000, items: [{ name: '숙소비', amount: 400000, kind: 'ITEM' }] })
+  const breakfast = await req('POST', `${t}/receipts`, { store_name: '해장국집', payer_member_id: a, total_amount: 40000,
+    items: [{ name: '해장국', amount: 30000, kind: 'ITEM' }, { name: '김밥', amount: 10000, kind: 'ITEM' }] })
+  await req('POST', `${t}/receipts/${lodging.id}/confirm`)
+  await req('POST', `${t}/receipts/${breakfast.id}/confirm`)
+
+  const paid = await req('POST', `${t}/checks/interpret`, { text: '현우랑 수아는 숙소비 보냈어' })
+  assert.deepEqual([paid.changes[0].after_member_ids, paid.changes[0].after_amount], [[a], 100000])
+  await req('POST', `${t}/checks/apply`, { changes: [{ item_id: paid.changes[0].item_id, member_ids: [a], amount: 100000 }] })
+  assert.equal((await req('GET', `${t}/receipts/${lodging.id}`)).total_amount, 100000)
+
+  const q = await req('POST', `${t}/checks/interpret`, { text: '수아는 아침 안 먹었어' })
+  assert.equal(q.status, 'NEEDS_CLARIFICATION')
+  const ans = await req('POST', `${t}/checks/interpret`, { text: '해장국이랑 김밥', previous: q.text })
+  assert.deepEqual(ans.changes.map((x) => x.after_member_ids), [[a, b, c], [a, b, c]])
+})

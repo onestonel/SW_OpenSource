@@ -78,6 +78,11 @@ def test_example1_matches_spec(api, db):
     token, m = example1(api, db)
     s = recalc(api, token).json()
     assert s["created_at"].endswith("+09:00")
+    got = latest(api, token).json()
+    assert got == s  # 최신 결과 보기도 계산 답장과 같다
+    for t in s["transfers"]:  # 합친 과정 설명은 test_merged_transfer_is_explained에서 따로 본다
+        assert t.pop("explanation") is None
+        t.pop("breakdown")
     assert {k: v for k, v in s.items() if k != "created_at"} == {
         "version": 1,
         "rounding": "WON_1",
@@ -96,7 +101,6 @@ def test_example1_matches_spec(api, db):
         "excluded_receipts": [],
         "copy_text": "[같이정산 · 제주 여행 · 버전 1]\nB → A 145,000원\nC → A 145,000원\nD → A 115,000원",
     }
-    assert latest(api, token).json() == s
 
 
 def test_example2_one_won_merges_pairs(api, db):
@@ -251,3 +255,39 @@ def test_old_result_keeps_names_after_member_change(api, db):
 def test_docs_lists_settlement_api(client):
     paths = client.get("/openapi.json").json()["paths"]
     assert {"/api/v1/rooms/{room_token}/settlements", "/api/v1/rooms/{room_token}/settlements/latest"} <= set(paths)
+
+
+def test_merged_transfer_is_explained(api):
+    """지영이 숙소비, 민수가 비행기 · 저녁을 냈을 때: 서로 보낼 돈을 합친 과정을 설명한다."""
+    room = api.post("/rooms", {"name": "여행", "members": ["민수", "지영"]}).json()
+    t = room["room_token"]
+    mi, ji = [m["id"] for m in room["members"]]
+
+    def receipt(store, payer, amount):
+        r = api.post(f"/rooms/{t}/receipts", {"store_name": store, "payer_member_id": payer, "total_amount": amount,
+                                              "items": [{"name": store, "amount": amount}]}).json()
+        api.post(f"/rooms/{t}/receipts/{r['id']}/confirm", expect=200)
+
+    receipt("숙소", ji, 200000)   # 민수 → 지영 100,000
+    receipt("비행기", mi, 200000)  # 지영 → 민수 100,000
+    receipt("저녁", mi, 300000)   # 지영 → 민수 150,000
+    s = api.post(f"/rooms/{t}/settlements").json()
+    [tr] = s["transfers"]
+    assert (tr["from"]["name"], tr["to"]["name"], tr["amount"]) == ("지영", "민수", 150000)
+    assert tr["explanation"] == ("지영이 민수에게 보낼 250,000원(비행기 100,000원, 저녁 150,000원)에서 "
+                                 "민수가 지영에게 보낼 숙소 100,000원을 빼서, 지영은 민수에게 150,000원만 보내면 돼요.")
+    assert [(x["store_name"], x["amount"]) for x in tr["breakdown"]] == [("숙소", 100000), ("비행기", 100000),
+                                                                          ("저녁", 150000)]
+    # 최신 결과 보기에도 그대로 나온다 (저장된 결과)
+    assert api.get(f"/rooms/{t}/settlements/latest").json()["transfers"][0]["explanation"] == tr["explanation"]
+
+
+def test_one_way_transfer_has_no_explanation(api):
+    room = api.post("/rooms", {"name": "점심", "members": ["A", "B"]}).json()
+    t = room["room_token"]
+    a = room["members"][0]["id"]
+    r = api.post(f"/rooms/{t}/receipts", {"store_name": "식당", "payer_member_id": a, "total_amount": 20000,
+                                          "items": [{"name": "밥", "amount": 20000}]}).json()
+    api.post(f"/rooms/{t}/receipts/{r['id']}/confirm", expect=200)
+    [tr] = api.post(f"/rooms/{t}/settlements").json()["transfers"]
+    assert tr["explanation"] is None and len(tr["breakdown"]) == 1
