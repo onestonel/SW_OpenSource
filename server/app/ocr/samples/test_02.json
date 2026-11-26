@@ -1,0 +1,37 @@
+{
+  "store_name": "오늘의 베이커리",
+  "total_amount": 25100,
+  "items": [
+    {
+      "name": "소금빵",
+      "amount": 12000,
+      "kind": "ITEM",
+      "quantity": 4,
+      "unit_price": 3000
+    },
+    {
+      "name": "크루아상",
+      "amount": 7600,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 3800
+    },
+    {
+      "name": "우유식빵",
+      "amount": 5500,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 5500
+    }
+  ],
+  "synth": {
+    "layout": "two_line",
+    "font": "batang",
+    "size": 22,
+    "rotate": 0.8,
+    "blur": 0.5,
+    "total_label": "합계",
+    "pay": "card",
+    "seed": 12
+  }
+}

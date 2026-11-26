@@ -1,0 +1,27 @@
+{
+  "store_name": "무정집",
+  "total_amount": 32000,
+  "items": [
+    {
+      "name": "무정모듬(대)",
+      "amount": 25000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 25000
+    },
+    {
+      "name": "비빔국수",
+      "amount": 5000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 5000
+    },
+    {
+      "name": "공기밥",
+      "amount": 2000,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 1000
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "store_name": "메르까도",
+  "total_amount": 154000,
+  "items": [
+    { "name": "럼프스테이크", "amount": 140800, "kind": "ITEM", "quantity": 4, "unit_price": 35200 },
+    { "name": "아이스 티(Iced Tea)", "amount": 6600, "kind": "ITEM", "quantity": 2, "unit_price": 3300 },
+    { "name": "웰치스포도(Welch s)", "amount": 3300, "kind": "ITEM", "quantity": 1, "unit_price": 3300 },
+    { "name": "콜라(Coca Cola)", "amount": 3300, "kind": "ITEM", "quantity": 1, "unit_price": 3300 }
+  ]
+}

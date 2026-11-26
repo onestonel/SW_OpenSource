@@ -1,0 +1,105 @@
+{
+  "store_name": "코스트코 코리아 일산점",
+  "total_amount": 255840,
+  "items": [
+    {
+      "name": "뉴케어구수한맛+",
+      "amount": 32990,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 32990
+    },
+    {
+      "name": "SOUP여성가디건",
+      "amount": 22990,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 22990
+    },
+    {
+      "name": "뉴케어구수한맛+",
+      "amount": 32990,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 32990
+    },
+    {
+      "name": "동원 번데기",
+      "amount": 27980,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 13990
+    },
+    {
+      "name": "한우곰탕",
+      "amount": 24270,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 24270
+    },
+    {
+      "name": "바나나",
+      "amount": 1990,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 1990
+    },
+    {
+      "name": "단팥호빵95GX12",
+      "amount": 9790,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 9790
+    },
+    {
+      "name": "단팥호빵90GX12",
+      "amount": -1000,
+      "kind": "DISCOUNT"
+    },
+    {
+      "name": "코코넛휘낭시에",
+      "amount": 11990,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 11990
+    },
+    {
+      "name": "코코넛휘낭시에",
+      "amount": -1500,
+      "kind": "DISCOUNT"
+    },
+    {
+      "name": "KAMIL HAND CREAM",
+      "amount": 12990,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 12990
+    },
+    {
+      "name": "KAMIL HAND CREAM",
+      "amount": -3000,
+      "kind": "DISCOUNT"
+    },
+    {
+      "name": "프라이드치킨",
+      "amount": 17970,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 17970
+    },
+    {
+      "name": "자일리톨껌150GX3",
+      "amount": 10490,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 10490
+    },
+    {
+      "name": "국산돈육삼겹로스",
+      "amount": 54900,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 54900
+    }
+  ]
+}

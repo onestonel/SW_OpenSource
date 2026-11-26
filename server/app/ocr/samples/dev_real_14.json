@@ -1,0 +1,13 @@
+{
+  "store_name": "대경유업안곡주유소",
+  "total_amount": 53820,
+  "items": [
+    {
+      "name": "휘발유",
+      "amount": 53820,
+      "kind": "ITEM",
+      "quantity": 30,
+      "unit_price": 1794
+    }
+  ]
+}

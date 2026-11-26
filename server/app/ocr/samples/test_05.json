@@ -1,0 +1,52 @@
+{
+  "store_name": "정산마트 광교점",
+  "total_amount": 11300,
+  "items": [
+    {
+      "name": "생수 2L",
+      "amount": 2400,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 1200
+    },
+    {
+      "name": "컵라면",
+      "amount": 4500,
+      "kind": "ITEM",
+      "quantity": 3,
+      "unit_price": 1500
+    },
+    {
+      "name": "삼각김밥",
+      "amount": 2600,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 1300
+    },
+    {
+      "name": "바나나우유",
+      "amount": 1700,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 1700
+    },
+    {
+      "name": "봉투",
+      "amount": 100,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 100
+    }
+  ],
+  "synth": {
+    "layout": "simple",
+    "font": "malgun",
+    "size": 21,
+    "store_style": "sangho",
+    "rotate": -0.8,
+    "blur": 0.4,
+    "total_label": "결제금액",
+    "pay": "card",
+    "seed": 15
+  }
+}

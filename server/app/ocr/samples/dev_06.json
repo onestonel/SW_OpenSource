@@ -1,0 +1,45 @@
+{
+  "store_name": "홍콩반점 경기대점",
+  "total_amount": 34500,
+  "items": [
+    {
+      "name": "짜장면",
+      "amount": 14000,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 7000
+    },
+    {
+      "name": "짬뽕",
+      "amount": 8500,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 8500
+    },
+    {
+      "name": "탕수육(소)",
+      "amount": 15000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 15000
+    },
+    {
+      "name": "쿠폰할인",
+      "amount": -3000,
+      "kind": "DISCOUNT"
+    }
+  ],
+  "synth": {
+    "layout": "simple",
+    "font": "gulim",
+    "size": 22,
+    "store_style": "bracket",
+    "rotate": 2.0,
+    "blur": 0.6,
+    "subtotal_label": "합계",
+    "total_label": "결제금액",
+    "pay": "card",
+    "shadow": 0.4,
+    "seed": 6
+  }
+}

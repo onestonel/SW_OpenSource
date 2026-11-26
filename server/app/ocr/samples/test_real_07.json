@@ -1,0 +1,13 @@
+{
+  "store_name": "철원양평해장국 신관",
+  "total_amount": 11000,
+  "items": [
+    {
+      "name": "포장]양평해장국",
+      "amount": 11000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 11000
+    }
+  ]
+}

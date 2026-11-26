@@ -1,0 +1,41 @@
+{
+  "store_name": "아성다이소_금촌본점",
+  "total_amount": 13500,
+  "items": [
+    {
+      "name": "직사각 박스 3사이즈(20",
+      "amount": 2000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2000
+    },
+    {
+      "name": "동물돈봉투(12매입)_오리",
+      "amount": 500,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 500
+    },
+    {
+      "name": "스프레이피죤 로맨틱플라워향",
+      "amount": 3000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 3000
+    },
+    {
+      "name": "제이웨이브 청소포 25매(",
+      "amount": 2000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2000
+    },
+    {
+      "name": "걸이형 제습제 200g",
+      "amount": 6000,
+      "kind": "ITEM",
+      "quantity": 6,
+      "unit_price": 1000
+    }
+  ]
+}

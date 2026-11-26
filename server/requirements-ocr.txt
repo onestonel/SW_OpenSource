@@ -1,0 +1,12 @@
+# 영수증 자동 인식(V2 프로토타입)을 실제 엔진으로 돌릴 때만 설치한다. 서버 기본값(OCR_ENGINE=stub)에는 필요 없다.
+#   pip install -r requirements-ocr.txt
+-r requirements.txt
+Pillow>=10.0
+# Tesseract 프로그램과 한국어(kor) 데이터를 따로 설치해야 한다 (app/ocr/README.md)
+pytesseract>=0.3.10
+# 전처리 단계(영수증 영역 자르기 · 조명 평탄화 · 기울기 보정 · 적응형 이진화)를 켤 때 쓴다. 끄면 필요 없다
+opencv-python-headless>=4.8
+# 비교용 두 번째 엔진. PyTorch까지 약 1GB라 필요할 때만 주석을 푼다
+# easyocr>=1.7
+# PaddleOCR(비교용 세 번째 엔진)는 numpy · OpenCV 버전이 위 패키지와 부딪혀서 별도 가상환경에 설치한다 (app/ocr/README.md)
+#   paddlepaddle==3.2.2 paddleocr==3.7.0  (3.3.x는 Windows CPU 가속에서 오류)

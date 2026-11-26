@@ -1,0 +1,12 @@
+{
+  "store_name": "히츠지야(첨단점)",
+  "total_amount": 92000,
+  "items": [
+    { "name": "훗카이도세트", "amount": 36000, "kind": "ITEM", "quantity": 1, "unit_price": 36000 },
+    { "name": "램 혀구이", "amount": 16000, "kind": "ITEM", "quantity": 1, "unit_price": 16000 },
+    { "name": "우삼겹 탄탄멘", "amount": 9000, "kind": "ITEM", "quantity": 1, "unit_price": 9000 },
+    { "name": "참이슬", "amount": 15000, "kind": "ITEM", "quantity": 3, "unit_price": 5000 },
+    { "name": "하이볼(피치)", "amount": 8000, "kind": "ITEM", "quantity":1, "unit_price": 8000 },
+    { "name": "하이볼(산토리)", "amount": 8000, "kind": "ITEM", "quantity": 1, "unit_price": 8000 }
+  ]
+}

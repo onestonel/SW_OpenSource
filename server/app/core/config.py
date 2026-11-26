@@ -18,6 +18,7 @@ class Settings:
     database_url: str = DEFAULT_DATABASE_URL
     cors_origins: list[str] = field(default_factory=lambda: ["http://localhost:3000"])
     receipt_storage_path: str = "./data/receipts"
+    ocr_engine: str = "stub"
     auto_migrate: bool = True  # 서버가 켜질 때 DB 테이블을 최신으로 (alembic upgrade head)
 
 
@@ -26,6 +27,7 @@ def load_settings() -> Settings:
         database_url=os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL),
         cors_origins=_list(os.getenv("CORS_ORIGINS", "http://localhost:3000")),
         receipt_storage_path=os.getenv("RECEIPT_STORAGE_PATH", "./data/receipts"),
+        ocr_engine=os.getenv("OCR_ENGINE", "stub"),
         auto_migrate=os.getenv("AUTO_MIGRATE", "true").strip().lower() in {"1", "true", "yes", "on"},
     )
 
