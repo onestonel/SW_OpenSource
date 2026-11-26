@@ -1,0 +1,43 @@
+{
+  "store_name": "스시 정산",
+  "total_amount": 52000,
+  "items": [
+    {
+      "name": "모둠초밥",
+      "amount": 36000,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 18000
+    },
+    {
+      "name": "우동",
+      "amount": 8000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 8000
+    },
+    {
+      "name": "사케",
+      "amount": 12000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 12000
+    },
+    {
+      "name": "할인",
+      "amount": -4000,
+      "kind": "DISCOUNT"
+    }
+  ],
+  "synth": {
+    "layout": "table",
+    "font": "malgun",
+    "size": 22,
+    "rotate": -1.5,
+    "blur": 0.6,
+    "subtotal_label": "합계",
+    "total_label": "결제금액",
+    "pay": "card",
+    "seed": 11
+  }
+}

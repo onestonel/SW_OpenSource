@@ -1,0 +1,46 @@
+{
+  "store_name": "엄마손분식",
+  "total_amount": 31000,
+  "items": [
+    {
+      "name": "떡볶이",
+      "amount": 10000,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 5000
+    },
+    {
+      "name": "순대",
+      "amount": 4500,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 4500
+    },
+    {
+      "name": "모둠튀김",
+      "amount": 6000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 6000
+    },
+    {
+      "name": "김밥",
+      "amount": 10500,
+      "kind": "ITEM",
+      "quantity": 3,
+      "unit_price": 3500
+    }
+  ],
+  "synth": {
+    "layout": "table",
+    "font": "malgun",
+    "size": 21,
+    "store_style": "sangho",
+    "rotate": 1.0,
+    "blur": 0.5,
+    "noise": 0.15,
+    "total_label": "청구금액",
+    "pay": "card",
+    "seed": 5
+  }
+}

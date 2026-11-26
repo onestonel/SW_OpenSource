@@ -1,0 +1,14 @@
+{
+  "store_name": "숯숯바베큐매점",
+  "total_amount": 109400,
+  "items": [
+    { "name": "*갈매기살", "amount": 39800, "kind": "ITEM", "quantity": 1, "unit_price": 39800 },
+    { "name": "*삼겹살", "amount": 45100, "kind": "ITEM", "quantity": 1, "unit_price": 45100 },
+    { "name": "*양파", "amount": 1000, "kind": "ITEM", "quantity": 1, "unit_price": 1000 },
+    { "name": "오뚜기밥", "amount": 4500, "kind": "ITEM", "quantity": 3, "unit_price": 1500 },
+    { "name": "소세지", "amount": 8000, "kind": "ITEM", "quantity": 1, "unit_price": 8000 },
+    { "name": "쌈무", "amount": 3000, "kind": "ITEM", "quantity": 1, "unit_price": 3000 },
+    { "name": "닭꼬치", "amount": 5000, "kind": "ITEM", "quantity":1, "unit_price": 5000 },
+    { "name": "*모듬버섯(소)", "amount": 3000, "kind": "ITEM", "quantity": 1, "unit_price": 3000 }
+  ]
+}

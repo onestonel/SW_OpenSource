@@ -1,0 +1,46 @@
+{
+  "store_name": "금촌농협로컬푸드직매장",
+  "total_amount": 57120,
+  "items": [
+    {
+      "name": "참드림10kg 10kg",
+      "amount": 35000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 35000
+    },
+    {
+      "name": "[소비쿠폰] 판란 2 특란30구",
+      "amount": 9300,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 9300
+    },
+    {
+      "name": "(농할 행사) 26년 10월 3차_농축",
+      "amount": -1860,
+      "kind": "DISCOUNT"
+    },
+    {
+      "name": "배(알뜰배)/3kg/6내/상/국산 3kg/박스",
+      "amount": 10500,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 10500
+    },
+    {
+      "name": "서울우유 1L 1L",
+      "amount": 2980,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2980
+    },
+    {
+      "name": "로컬푸드(노지모듬상추)",
+      "amount": 1200,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 1200
+    }
+  ]
+}

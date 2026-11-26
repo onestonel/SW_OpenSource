@@ -1,0 +1,17 @@
+{
+  "store_name": "아베베베이커리",
+  "total_amount": 31600,
+  "items": [
+    { "name": "영실목장 순수우유 크림빵", "amount": 3300, "kind": "ITEM", "quantity": 1, "unit_price": 3300 },
+    { "name": "아베베X로투스 크림도너츠", "amount": 2900, "kind": "ITEM", "quantity": 1, "unit_price": 2900 },
+    { "name": "가시리 흑임자 크림도너츠", "amount": 2900, "kind": "ITEM", "quantity": 1, "unit_price": 2900 },
+    { "name": "리얼 솔티 카라멜 크림도너츠", "amount": 2900, "kind": "ITEM", "quantity": 1, "unit_price": 2900 },
+    { "name": "종달리 딸기농장 크림빵", "amount": 3300, "kind": "ITEM", "quantity": 1, "unit_price": 3300 },
+    { "name": "중문 과자점 쿠키 크림도너츠", "amount": 2900, "kind": "ITEM", "quantity": 1, "unit_price": 2900 },
+    { "name": "한담 피스타 치오 품은 크림도너츠", "amount": 3200, "kind": "ITEM", "quantity":1, "unit_price": 3200 },
+    { "name": "우도 땅콩 크림도너츠", "amount": 2900, "kind": "ITEM", "quantity": 1, "unit_price": 2900 },
+    { "name": "한라산 1100고지 오메기 떡 쑥크림빵", "amount": 3800, "kind": "ITEM", "quantity": 1, "unit_price": 3800 },
+    { "name": "금능 사과 크림빵", "amount": 3300, "kind": "ITEM", "quantity": 1, "unit_price": 3300 },
+    { "name": "선물박스 비닐(환경부담금)", "amount": 200, "kind": "ITEM", "quantity": 1, "unit_price": 200 }
+  ]
+}

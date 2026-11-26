@@ -1,0 +1,44 @@
+{
+  "store_name": "피자 나눔",
+  "total_amount": 34800,
+  "items": [
+    {
+      "name": "페퍼로니피자(L)",
+      "amount": 25900,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 25900
+    },
+    {
+      "name": "치즈오븐스파게티",
+      "amount": 8900,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 8900
+    },
+    {
+      "name": "콜라",
+      "amount": 2000,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2000
+    },
+    {
+      "name": "통신사할인",
+      "amount": -2000,
+      "kind": "DISCOUNT"
+    }
+  ],
+  "synth": {
+    "layout": "simple",
+    "font": "gulim",
+    "size": 22,
+    "rotate": -1.0,
+    "blur": 0.5,
+    "noise": 0.15,
+    "subtotal_label": "합계",
+    "total_label": "받을금액",
+    "pay": "card",
+    "seed": 13
+  }
+}

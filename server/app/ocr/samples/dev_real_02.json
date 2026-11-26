@@ -1,0 +1,14 @@
+{
+  "store_name": "에이스돈",
+  "total_amount": 145000,
+  "items": [
+    { "name": "양념갈비1.2kg", "amount": 69000, "kind": "ITEM", "quantity": 1, "unit_price": 69000 },
+    { "name": "양념갈비600g", "amount": 39000, "kind": "ITEM", "quantity": 1, "unit_price": 39000 },
+    { "name": "된장찌개", "amount": 6000, "kind": "ITEM", "quantity": 2, "unit_price": 3000 },
+    { "name": "도시락", "amount": 6000, "kind": "ITEM", "quantity": 1, "unit_price": 6000 },
+    { "name": "공기밥", "amount": 3000, "kind": "ITEM", "quantity": 3, "unit_price": 1000 },
+    { "name": "갈비탕", "amount": 12000, "kind": "ITEM", "quantity": 1, "unit_price": 12000 },
+    { "name": "소주", "amount": 5000, "kind": "ITEM", "quantity":1, "unit_price": 5000 },
+    { "name": "맥주", "amount": 5000, "kind": "ITEM", "quantity": 1, "unit_price": 5000 }
+  ]
+}

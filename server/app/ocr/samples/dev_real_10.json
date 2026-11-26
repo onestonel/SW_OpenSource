@@ -1,0 +1,32 @@
+{
+  "store_name": "금촌농협로컬푸드직매장",
+  "total_amount": 13260,
+  "items": [
+    {
+      "name": "앞다리",
+      "amount": 6552,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 6552
+    },
+    {
+      "name": "앞다리",
+      "amount": 5508,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 5508
+    },
+    {
+      "name": "로컬푸드(무)1~5kg",
+      "amount": 1500,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 1500
+    },
+    {
+      "name": "(농할 행사) 26년 11월 2차_농축",
+      "amount": -300,
+      "kind": "DISCOUNT"
+    }
+  ]
+}

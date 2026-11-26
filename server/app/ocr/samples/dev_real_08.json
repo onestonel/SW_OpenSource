@@ -1,0 +1,8 @@
+{
+  "store_name": "피자스쿨 아주대점",
+  "total_amount": 19700,
+  "items": [
+    { "name": "오지치즈포테이토피자", "amount": 16900, "kind": "ITEM", "quantity": 1, "unit_price": 16900 },
+    { "name": "코카콜라 1.25L", "amount": 2800, "kind": "ITEM", "quantity": 1, "unit_price": 2800 }
+  ]
+}

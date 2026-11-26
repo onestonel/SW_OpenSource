@@ -1,0 +1,104 @@
+{
+  "store_name": "207피트 파주본점(물류아울렛)",
+  "total_amount": 54640,
+  "items": [
+    {
+      "name": "피코크 달콤쫄깃 찹쌀호떡 400g",
+      "amount": 3900,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 3900
+    },
+    {
+      "name": "미식로 소대창 200g",
+      "amount": 11800,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 5900
+    },
+    {
+      "name": "이켈 울트라에센스 마스크팩 25ml*10 오",
+      "amount": 1900,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 1900
+    },
+    {
+      "name": "롯데치즈스틱 400g",
+      "amount": 6600,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 6600
+    },
+    {
+      "name": "한성 해물맛우동 211.5G",
+      "amount": 990,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 990
+    },
+    {
+      "name": "한성 튀김맛우동 211.5G",
+      "amount": 990,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 990
+    },
+    {
+      "name": "빙그레 딸기맛우유 240ml",
+      "amount": 2380,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 1190
+    },
+    {
+      "name": "빙그레 바나나맛우유 240ml",
+      "amount": 1190,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 1190
+    },
+    {
+      "name": "로즈니치 향수 20ml",
+      "amount": 1900,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 1900
+    },
+    {
+      "name": "김도둑돌자반 플레인 35g",
+      "amount": 1050,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 1050
+    },
+    {
+      "name": "아로마비드스빈스450g-블랙체리",
+      "amount": 1990,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 1990
+    },
+    {
+      "name": "에르샤 조끼",
+      "amount": 2900,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2900
+    },
+    {
+      "name": "오늘낳은특란30구",
+      "amount": 14600,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 7300
+    },
+    {
+      "name": "강릉초당두부 550g",
+      "amount": 2450,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 2450
+    }
+  ]
+}

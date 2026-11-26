@@ -1,0 +1,38 @@
+{
+  "store_name": "카페 오픈소스",
+  "total_amount": 30000,
+  "items": [
+    {
+      "name": "아메리카노(ICE)",
+      "amount": 13500,
+      "kind": "ITEM",
+      "quantity": 3,
+      "unit_price": 4500
+    },
+    {
+      "name": "카페라떼",
+      "amount": 10000,
+      "kind": "ITEM",
+      "quantity": 2,
+      "unit_price": 5000
+    },
+    {
+      "name": "치즈케이크",
+      "amount": 6500,
+      "kind": "ITEM",
+      "quantity": 1,
+      "unit_price": 6500
+    }
+  ],
+  "synth": {
+    "layout": "two_line",
+    "font": "malgun",
+    "size": 22,
+    "rotate": 1.5,
+    "blur": 0.8,
+    "total_label": "받을금액",
+    "pay": "card",
+    "shadow": 0.3,
+    "seed": 3
+  }
+}

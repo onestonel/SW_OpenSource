@@ -1,0 +1,13 @@
+{
+  "store_name": "에이스돈",
+  "total_amount": 138000,
+  "items": [
+    { "name": "생삼겹살500g", "amount": 78000, "kind": "ITEM", "quantity": 2, "unit_price": 39000 },
+    { "name": "돼지껍데기", "amount": 7000, "kind": "ITEM", "quantity": 1, "unit_price": 7000 },
+    { "name": "공기밥", "amount": 6000, "kind": "ITEM", "quantity": 6, "unit_price": 1000 },
+    { "name": "된장찌개", "amount": 3000, "kind": "ITEM", "quantity": 1, "unit_price": 3000 },
+    { "name": "계란찜", "amount": 3000, "kind": "ITEM", "quantity": 1, "unit_price": 3000 },
+    { "name": "250g", "amount": 21000, "kind": "ITEM", "quantity": 1, "unit_price": 21000 },
+    { "name": "맥주", "amount": 20000, "kind": "ITEM", "quantity": 4, "unit_price": 5000 }
+  ]
+}
