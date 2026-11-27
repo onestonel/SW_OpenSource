@@ -103,11 +103,12 @@ def test_kind_from_ocr_is_followed():
     assert d.notes == ["'제휴': 할인으로 보고 -1,000원으로 넣었습니다."]
 
 
-def test_missing_store_keeps_existing_name():
-    d = make_draft(ocr(store=None), keep_store="1차 식당")
+@pytest.mark.parametrize("ocr_store", ["같이고기 경기대점", None, "  ", "가" * 60])
+def test_given_store_name_is_used_as_is(ocr_store):
+    """사용자가 적은 가게 이름을 주면 OCR이 읽은 가게 이름은 쓰지 않고, 가게 이름 알림도 남기지 않는다."""
+    d = make_draft(ocr(store=ocr_store), store_name="1차 식당")
     assert d.store_name == "1차 식당"
-    assert d.notes == ["가게 이름을 읽지 못해 원래 이름('1차 식당')을 그대로 두었습니다."]
-    assert make_draft(ocr(store="같이고기"), keep_store="1차 식당").store_name == "같이고기"
+    assert d.notes == []
 
 
 def test_more_than_100_lines_keeps_first_100():

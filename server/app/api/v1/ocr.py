@@ -1,7 +1,8 @@
 """영수증 자동 인식 API (V2 프로토타입).
 
 영수증에 올린 사진으로 OCR을 돌려 '영수증 만들기'에 넣을 초안을 돌려준다.
-save=true면 그 초안을 영수증 입력 규칙에 맞게 정리해(app/ocr_draft.py) 이 영수증에 덮어쓴다.
+save=true면 그 초안을 영수증 입력 규칙에 맞게 정리해(app/ocr_draft.py) 이 영수증의 총액 · 품목에 덮어쓴다.
+가게 이름은 사용자가 적은 값을 그대로 둔다 (OCR이 읽은 가게 이름은 draft.store_name으로 돌려주기만 한다).
 상태는 '확인 중' 그대로라, 사용자가 확인 화면에서 고친 뒤 확정해야 정산에 들어간다.
 V2에서는 사진을 올리면 RabbitMQ에 작업이 들어가고 Worker가 같은 run_ocr · save_draft를 부르게 된다.
 지금은 바로 확인할 수 있게 요청 안에서 기다렸다가 답한다.
@@ -67,12 +68,11 @@ class OcrOut(BaseModel):
 
 
 def save_draft(db, room: Room, receipt: Receipt, draft: ReceiptDraft) -> None:
-    """정리한 초안으로 영수증의 가게 이름 · 총액 · 품목을 바꾼다. 결제자와 상태('확인 중')는 그대로 둔다.
+    """정리한 초안으로 영수증의 총액 · 품목을 바꾼다. 가게 이름 · 결제자 · 상태('확인 중')는 그대로 둔다.
 
     품목은 통째로 덮어쓴다. 사진을 다시 올려 다시 읽어도 품목이 겹쳐 쌓이지 않는다.
     새 품목은 영수증 만들기와 같이 모든 구성원 체크로 시작한다 (이전 품목의 체크는 같이 지워진다).
     """
-    receipt.store_name = draft.store_name
     receipt.total_amount = draft.total_amount
     receipt.items = [_new_item(room, line, n) for n, line in enumerate(draft.items, start=1)]
     db.commit()
@@ -84,14 +84,14 @@ def save_draft(db, room: Room, receipt: Receipt, draft: ReceiptDraft) -> None:
     response_model=OcrOut,
     summary="영수증 사진 자동 인식 (V2 프로토타입)",
     description="올린 사진을 읽어 가게 이름 · 합계 · 품목 초안을 돌려줍니다. lines는 줄마다 어떻게 판단했는지 보여 줍니다. "
-                "save=true면 초안을 정리해 이 영수증(확인 중)의 가게 이름 · 총액 · 품목을 바꿔 저장합니다.",
+                "save=true면 초안을 정리해 이 영수증(확인 중)의 총액 · 품목을 바꿔 저장합니다. 가게 이름은 바꾸지 않습니다.",
 )
 def recognize_photo(
     room: CurrentRoom,
     receipt: CurrentReceipt,
     db: DB,
     engine: Literal["stub", "tesseract", "easyocr"] | None = Query(None, description="비우면 OCR_ENGINE 설정을 씁니다"),
-    save: bool = Query(False, description="true면 읽은 초안으로 이 영수증의 가게 이름 · 총액 · 품목을 바꿉니다 (결제자는 그대로)"),
+    save: bool = Query(False, description="true면 읽은 초안으로 이 영수증의 총액 · 품목을 바꿉니다 (가게 이름 · 결제자는 그대로)"),
 ) -> OcrOut:
     if save and receipt.status == "CONFIRMED":
         raise _confirmed_error()
@@ -111,7 +111,7 @@ def recognize_photo(
     db.refresh(receipt)  # OCR은 수십 초 걸릴 수 있다. 그 사이에 확정됐으면 덮어쓰지 않는다
     if receipt.status == "CONFIRMED":
         raise _confirmed_error()
-    draft = make_draft(RawDraft.from_dict(out.draft.model_dump()), keep_store=receipt.store_name)
+    draft = make_draft(RawDraft.from_dict(out.draft.model_dump()), store_name=receipt.store_name)
     out.warnings += draft.notes  # 경고 칸이 영수증 테이블에 없으니, 고친 이유와 함께 답장으로 돌려준다
     if draft.ok:
         save_draft(db, room, receipt, draft)

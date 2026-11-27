@@ -64,19 +64,20 @@ def fake_ocr(monkeypatch, draft: dict, warnings: list[str] | None = None) -> Non
     monkeypatch.setattr(ocr_api, "run_ocr", lambda data, engine: FakeResult(draft, warnings))
 
 
-def test_save_overwrites_receipt_and_keeps_checking(client, api, receipt):
+def test_save_fills_total_and_items_and_keeps_store_name(client, api, receipt):
     res = read(client, receipt["url"], save="true")
     assert res.status_code == 200, res.text
     body = res.json()
     saved = body["receipt"]
     assert saved["status"] == "CHECKING"
-    assert saved["store_name"] == "같이고기 경기대점" and saved["total_amount"] == 93000
+    assert saved["store_name"] == "1차 식당"  # 가게 이름은 사용자가 적은 값 그대로 (OCR이 읽은 이름으로 바꾸지 않음)
+    assert saved["total_amount"] == 93000
     assert rows(saved) == STUB_ITEMS
     assert saved["payer"]["name"] == "B"  # 결제자는 OCR이 알 수 없어서 그대로
     assert saved["check"] == {"items_sum": 93000, "difference": 0, "is_matched": True}
     assert saved["photo_url"] == f"/api/v1{receipt['url']}/photo"
     assert api.get(receipt["url"]).json() == saved
-    assert body["draft"]["store_name"] == "같이고기 경기대점"  # 초안 · 경고 · 줄은 저장하지 않을 때와 같다
+    assert body["draft"]["store_name"] == "같이고기 경기대점"  # OCR이 읽은 이름은 초안으로만 돌려준다
     assert body["warnings"] == []
 
 
@@ -132,21 +133,20 @@ def test_confirmed_while_reading_is_not_overwritten(client, api, receipt, monkey
 def test_messy_draft_is_cleaned_before_saving(client, api, receipt, monkeypatch):
     """OCR 초안이 영수증 입력 규칙에 안 맞으면 정리해서 저장하고, 고친 이유를 warnings 뒤에 붙인다."""
     long_name = "모둠 " * 20
-    fake_ocr(monkeypatch, {"store_name": None, "total_amount": None, "items": [
+    fake_ocr(monkeypatch, {"store_name": "가" * 60, "total_amount": None, "items": [
         {"name": long_name, "amount": 12000, "kind": "ITEM"},
         {"name": "25,000 1개", "amount": 0, "kind": "ITEM"},
         {"name": "제휴할인", "amount": -2000, "kind": "DISCOUNT"},
-    ]}, warnings=["가게 이름을 찾지 못했습니다.", "합계 금액을 찾지 못했습니다."])
+    ]}, warnings=["합계 금액을 찾지 못했습니다."])
     body = read(client, receipt["url"], save="true").json()
     saved = body["receipt"]
-    assert saved["store_name"] == "1차 식당"  # 못 읽은 가게 이름은 원래 이름 그대로
+    assert saved["store_name"] == "1차 식당"  # OCR이 읽은 가게 이름(60자)은 쓰지 않으니 자를 일도 없다
     assert saved["total_amount"] == 10000  # 합계를 못 읽어 품목 합으로
     assert rows(saved) == [(" ".join(long_name.split())[:50], 12000, "ITEM"), ("제휴할인", -2000, "DISCOUNT")]
-    assert body["warnings"][:2] == ["가게 이름을 찾지 못했습니다.", "합계 금액을 찾지 못했습니다."]
-    assert body["warnings"][2:] == [
+    assert body["warnings"][:1] == ["합계 금액을 찾지 못했습니다."]  # OCR 경고 뒤에 고친 이유가 붙는다
+    assert body["warnings"][1:] == [
         f"'{saved['items'][0]['name']}': 이름이 길어 앞 50자만 넣었습니다.",
         "'25,000 1개': 0원이라 뺐습니다.",
-        "가게 이름을 읽지 못해 원래 이름('1차 식당')을 그대로 두었습니다.",
         "합계를 읽지 못해 품목 합(10,000원)으로 넣었습니다.",
     ]
 

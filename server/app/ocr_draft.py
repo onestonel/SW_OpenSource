@@ -117,10 +117,11 @@ def _won(amount: int) -> str:
     return f"{amount:,}원"
 
 
-def make_draft(result: RawDraft, keep_store: str | None = None) -> ReceiptDraft:
+def make_draft(result: RawDraft, store_name: str | None = None) -> ReceiptDraft:
     """OCR 초안을 영수증 입력 규칙에 맞는 초안으로 고친다. 고친 이유는 notes에 순서대로 남긴다.
 
-    keep_store: 가게 이름을 못 읽었을 때 쓸 원래 이름 (이미 있는 영수증에 덮어쓸 때). 없으면 '영수증'.
+    store_name: 사용자가 적은 가게 이름 (이미 있는 영수증에 저장할 때). 주면 OCR이 읽은 가게 이름은 쓰지 않는다.
+    OCR은 가게 이름을 자주 틀려서, 가게 이름은 사용자가 직접 적는다 (API 명세서 3절 「새 영수증 흐름」).
     """
     notes: list[str] = []
     items: list[DraftLine] = []
@@ -158,9 +159,8 @@ def make_draft(result: RawDraft, keep_store: str | None = None) -> ReceiptDraft:
         items = items[:ITEMS_MAX]
 
     store = _clean(result.store_name)
-    if not store and keep_store:
-        store = keep_store
-        notes.append(f"가게 이름을 읽지 못해 원래 이름('{keep_store}')을 그대로 두었습니다.")
+    if store_name is not None:
+        store = store_name  # 사용자가 적은 이름을 그대로 쓴다. 고친 것이 아니라서 알림도 남기지 않는다
     elif not store:
         store = STORE_DEFAULT
         notes.append(f"가게 이름을 읽지 못해 '{STORE_DEFAULT}'(으)로 넣었습니다.")
