@@ -254,7 +254,7 @@
 
 | 칸 | 값 | 뜻 |
 | --- | --- | --- |
-| `engine` | `stub` · `tesseract` · `easyocr`. 비우면 서버 설정 `OCR_ENGINE` (기본 `stub`: 고정 초안) | 글자를 읽을 엔진 |
+| `engine` | `stub` · `tesseract` · `easyocr` · `remote`(ocr 컨테이너의 PaddleOCR, `--profile ocr`로 켬). 비우면 서버 설정 `OCR_ENGINE` (기본 `stub`: 고정 초안) | 글자를 읽을 엔진 |
 | `save` | `false`(기본) · `true` | `true`면 읽은 초안으로 이 영수증의 가게 이름 · 총액 · 품목을 바꿔 저장 |
 
 받는 것 `200`:
