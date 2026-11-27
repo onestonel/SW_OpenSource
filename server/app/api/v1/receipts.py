@@ -1,6 +1,8 @@
 """영수증 입력 · 확인 · 확정 API (V1 요구 명세 2 · 3단계 · API 명세서 3절). 사진은 따로 (photos).
 
 - 만들면 '확인 중'(CHECKING). 확인 중일 때만 고치기 · 지우기 · 확정을 할 수 있다.
+- 가게 이름과 결제자만으로 만들 수 있다. 총액 · 품목(ITEM 1개 이상)은 확정할 때 검사한다 (API 명세서 「새 영수증 흐름」).
+- 가게 이름은 정산방 안에서 겹치면 안 된다. AI 총무가 영수증을 가게 이름으로 구분하기 때문이다.
 - 확정(CONFIRMED)된 영수증만 정산에 들어간다. 고치려면 먼저 '확정 취소'.
 - 품목 합 ≠ 총액이어도 막지 않는다. 답장의 check로 알려 주고, 정산은 총액 기준으로 차액까지 나눈다.
 - 품목(ITEM) 줄은 만들 때 모든 구성원이 체크된 채로 시작한다 (체크 표에서 바꾼다). 할인 줄은 체크하지 않는다.
@@ -26,13 +28,13 @@ router = APIRouter(prefix="/rooms/{room_token}/receipts", tags=["receipts"])
 
 def receipt_out(room: Room, r: Receipt) -> ReceiptOut:
     items_sum = sum(i.amount for i in r.items)
+    difference = None if r.total_amount is None else r.total_amount - items_sum
     photo = f"/api/v1/rooms/{room.room_token}/receipts/{r.id}/photo" if r.photo_path else None
     return ReceiptOut(
         id=r.id, store_name=r.store_name, payer=PayerOut(id=r.payer.id, name=r.payer.name), status=r.status,
         total_amount=r.total_amount,
         items=[ReceiptItemOut(id=i.id, name=i.name, amount=i.amount, kind=i.kind) for i in r.items],
-        check=ReceiptCheckOut(items_sum=items_sum, difference=r.total_amount - items_sum,
-                              is_matched=items_sum == r.total_amount),
+        check=ReceiptCheckOut(items_sum=items_sum, difference=difference, is_matched=difference == 0),
         photo_url=photo, created_at=r.created_at,
     )
 
@@ -60,6 +62,34 @@ def _check_payer(db, room: Room, payer_id: int) -> None:
         raise validation_error("payer_member_id", "이 정산방 구성원이 아닙니다", "결제자를 골라주세요.")
 
 
+def _check_store_name(db, room: Room, name: str, receipt_id: int | None = None) -> None:
+    """같은 정산방에 같은 가게 이름의 다른 영수증이 있으면 409. 이름은 이미 앞뒤 공백을 뗀 값이다 (schemas.In)."""
+    same = select(Receipt.id).where(Receipt.room_id == room.id, Receipt.store_name == name)
+    if receipt_id is not None:
+        same = same.where(Receipt.id != receipt_id)
+    if db.scalar(same.limit(1)) is not None:
+        raise AppError(409, "STORE_NAME_DUPLICATE",
+                       f"이 정산방에 '{name}' 영수증이 이미 있습니다. '{name} 2'처럼 다른 이름을 적어 주세요.",
+                       {"fields": {"store_name": "같은 이름의 영수증이 이미 있습니다"}})
+
+
+def _missing_for_confirm(r: Receipt) -> dict[str, str]:
+    """확정하려면 채워야 하는 칸 → 이유. 다 채웠으면 빈 dict."""
+    missing = {}
+    if r.total_amount is None:
+        missing["total_amount"] = "총액을 입력해 주세요"
+    if not any(i.kind == "ITEM" for i in r.items):
+        missing["items"] = "품목을 1개 이상 넣어 주세요"
+    return missing
+
+
+_INCOMPLETE_MESSAGE = {
+    ("total_amount",): "총액을 입력해야 확정할 수 있습니다.",
+    ("items",): "품목을 1개 이상 넣어야 확정할 수 있습니다.",
+    ("total_amount", "items"): "총액과 품목을 입력해야 확정할 수 있습니다.",
+}
+
+
 def _all_checked(room: Room) -> list[ReceiptItemPayer]:
     return [ReceiptItemPayer(member_id=m.id) for m in room.members]
 
@@ -85,10 +115,12 @@ def list_receipts(room: CurrentRoom, db: DB) -> list[ReceiptOut]:
 
 @router.post("", response_model=ReceiptOut, status_code=201, summary="영수증 만들기 (상태: 확인 중)")
 def create_receipt(body: ReceiptIn, room: CurrentRoom, db: DB) -> ReceiptOut:
+    """가게 이름과 결제자만 보내도 된다 (총액 null · 품목 0개). 같은 가게 이름이 있으면 409 STORE_NAME_DUPLICATE."""
     _check_payer(db, room, body.payer_member_id)
     for n, line in enumerate(body.items):
         if line.id is not None:
             raise validation_error(f"items.{n}.id", "새 영수증에는 줄 id를 보낼 수 없습니다")
+    _check_store_name(db, room, body.store_name)
     receipt = Receipt(room_id=room.id, store_name=body.store_name, payer_member_id=body.payer_member_id,
                       total_amount=body.total_amount, status="CHECKING")
     receipt.items = [_new_item(room, line, n) for n, line in enumerate(body.items, start=1)]
@@ -113,10 +145,14 @@ def update_receipt(body: ReceiptIn, room: CurrentRoom, receipt: CurrentReceipt, 
     - 보내지 않은 기존 줄 → 지움 (그 줄의 체크도 지움)
 
     할인 줄을 품목으로 바꾸면 새 줄처럼 모든 구성원 체크로 시작하고, 품목을 할인으로 바꾸면 체크를 지운다.
+    총액 · 품목은 비워도 된다. 같은 가게 이름 검사는 이름을 바꿀 때만 한다
+    (이 규칙 전에 만든 정산방에는 같은 이름이 이미 있을 수 있어, 이름을 그대로 두면 고칠 수 있게 둔다).
     """
     if receipt.status == "CONFIRMED":
         raise _confirmed_error()
     _check_payer(db, room, body.payer_member_id)
+    if body.store_name != receipt.store_name:
+        _check_store_name(db, room, body.store_name, receipt.id)
     existing = {i.id: i for i in receipt.items}
     for n, line in enumerate(body.items):
         if line.id is not None and line.id not in existing:
@@ -159,8 +195,14 @@ def delete_receipt(receipt: CurrentReceipt, db: DB) -> Response:
 
 @router.post("/{receipt_id}/confirm", response_model=ReceiptOut, summary="확정")
 def confirm_receipt(room: CurrentRoom, receipt: CurrentReceipt, db: DB) -> ReceiptOut:
-    """품목 합 ≠ 총액이어도 확정된다. 이미 확정된 영수증이면 그대로 돌려준다."""
+    """품목 합 ≠ 총액이어도 확정된다. 이미 확정된 영수증이면 그대로 돌려준다.
+
+    총액이 없거나 품목(ITEM) 줄이 없으면 409 RECEIPT_INCOMPLETE (details.fields에 빈 칸).
+    """
     if receipt.status != "CONFIRMED":
+        missing = _missing_for_confirm(receipt)
+        if missing:
+            raise AppError(409, "RECEIPT_INCOMPLETE", _INCOMPLETE_MESSAGE[tuple(missing)], {"fields": missing})
         receipt.status = "CONFIRMED"
         mark_stale(db, room.id)
         db.commit()
