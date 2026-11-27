@@ -97,18 +97,22 @@ class ReceiptItemIn(In):
 
 
 class ReceiptIn(In):
-    """영수증 만들기 · 고치기. 품목 합 ≠ 총액이어도 막지 않는다 (답장의 check로 알려 준다)."""
+    """영수증 만들기 · 고치기. 가게 이름과 결제자만 있으면 '확인 중'으로 만들 수 있다.
 
-    store_name: str = Field(min_length=1, max_length=50, description="가게 이름 (예: 1차 식당)")
+    총액 · 품목은 비워도 되고, 확정할 때 검사한다 (409 RECEIPT_INCOMPLETE).
+    품목 합 ≠ 총액이어도 막지 않는다 (답장의 check로 알려 준다).
+    """
+
+    store_name: str = Field(min_length=1, max_length=50, description="가게 이름 (예: 1차 식당). 정산방 안에서 겹치면 안 된다")
     payer_member_id: int = Field(description="결제자. 이 정산방 구성원이어야 한다")
-    total_amount: int = Field(gt=0, le=MAX_AMOUNT, description="영수증 총액. 정산은 총액 기준이다")
-    items: list[ReceiptItemIn] = Field(max_length=100, description="품목 · 할인 줄. ITEM 줄이 1개 이상")
+    total_amount: int | None = Field(default=None, gt=0, le=MAX_AMOUNT,
+                                     description="영수증 총액. 비워 두면 확정할 수 없다. 정산은 총액 기준이다")
+    items: list[ReceiptItemIn] = Field(default_factory=list, max_length=100,
+                                       description="품목 · 할인 줄. 비워도 되지만 확정하려면 ITEM 줄이 1개 이상")
 
     @field_validator("items")
     @classmethod
     def _items(cls, items: list[ReceiptItemIn]) -> list[ReceiptItemIn]:
-        if not any(i.kind == "ITEM" for i in items):
-            raise ValueError("품목(ITEM) 줄이 1개 이상 있어야 합니다")
         ids = [i.id for i in items if i.id is not None]
         if len(ids) != len(set(ids)):
             raise ValueError("같은 줄 id가 두 번 들어 있습니다")
@@ -129,8 +133,8 @@ class ReceiptItemOut(Out):
 
 class ReceiptCheckOut(Out):
     items_sum: int = Field(description="할인을 포함한 모든 줄의 합")
-    difference: int = Field(description="total_amount − items_sum")
-    is_matched: bool = Field(description="false면 화면에 '품목 합 ≠ 총액' 경고 (확정은 그대로 가능)")
+    difference: int | None = Field(description="total_amount − items_sum. 총액이 없으면 null")
+    is_matched: bool = Field(description="false면 화면에 '품목 합 ≠ 총액' 경고 (확정은 그대로 가능). 총액이 없으면 false")
 
 
 class ReceiptOut(Out):
@@ -138,7 +142,7 @@ class ReceiptOut(Out):
     store_name: str
     payer: PayerOut
     status: ReceiptStatus = Field(description="CHECKING = 확인 중, CONFIRMED = 확정 (정산에 들어감)")
-    total_amount: int
+    total_amount: int | None = Field(description="아직 입력하지 않았으면 null (확인 중일 때만)")
     items: list[ReceiptItemOut]
     check: ReceiptCheckOut
     photo_url: str | None = Field(description="사진이 없으면 null")

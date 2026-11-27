@@ -46,9 +46,11 @@
 | 413 | `FILE_TOO_LARGE` | 사진이 10MB를 넘음 |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | jpg · png가 아닌 파일 |
 | 422 | `VALIDATION_ERROR` | 입력 검사 실패 (`details.fields`에 칸별 이유) |
+| 422 | `IMAGE_UNREADABLE` | 사진 자동 인식: 올린 사진 파일을 열 수 없음 |
 | 422 | `CHECK_EMPTY` | 아무도 체크하지 않은 품목이 있음 |
 | 422 | `NO_CONFIRMED_RECEIPTS` | 확정된 영수증 없이 '다시 계산' |
 | 500 | `INTERNAL_ERROR` | 그 밖의 서버 오류 |
+| 503 | `OCR_UNAVAILABLE` | 사진 자동 인식: 서버에 고른 OCR 엔진이 설치되어 있지 않음 |
 
 ---
 
@@ -155,6 +157,7 @@
 | `POST /rooms/{room_token}/receipts/{receipt_id}/unconfirm` | 확정 취소 (확인 중으로 되돌림) |
 | `POST /rooms/{room_token}/receipts/{receipt_id}/photo` | 사진 올리기 (선택) |
 | `GET /rooms/{room_token}/receipts/{receipt_id}/photo` | 사진 보기 |
+| `POST /rooms/{room_token}/receipts/{receipt_id}/photo/ocr` | 사진 자동 인식 (V2 준비): 초안 받기 · `save=true`면 이 영수증에 덮어쓰기 |
 
 ### 영수증 상태
 
@@ -242,6 +245,70 @@
 - 서버는 사진을 `RECEIPT_STORAGE_PATH`(볼륨 `/data/receipts`)에 무작위 파일 이름으로 저장합니다
 - 다시 올리면 이전 사진을 바꿉니다
 - 사진은 영수증을 확정하기 전에 작성할 때 편하게 쓰려는 것이고, 부차적으로는 앞으로 OCR을 넣기 위해 사진 데이터 공간을 확보해 둔 것이기 때문에, 확정된 영수증에는 사진을 올릴 수 없습니다. 프론트엔드가 확정된 영수증에 사진을 보내면 백엔드는 `409 RECEIPT_CONFIRMED`를 돌려줍니다. 확정한 뒤에 사진을 바꾸고 싶으면 먼저 확정 취소를 하면 됩니다.
+
+### 사진 자동 인식 `POST …/photo/ocr` (V2 준비)
+
+영수증에 올린 사진을 읽어 가게 이름 · 합계 · 품목 초안을 돌려줍니다. 사진이 영수증에 붙는 구조라서, 영수증을 먼저 만들고(가게 · 결제자 · 총액 · 품목 1개 이상) 사진을 올린 뒤에 부릅니다.
+
+쿼리:
+
+| 칸 | 값 | 뜻 |
+| --- | --- | --- |
+| `engine` | `stub` · `tesseract` · `easyocr`. 비우면 서버 설정 `OCR_ENGINE` (기본 `stub`: 고정 초안) | 글자를 읽을 엔진 |
+| `save` | `false`(기본) · `true` | `true`면 읽은 초안으로 이 영수증의 가게 이름 · 총액 · 품목을 바꿔 저장 |
+
+받는 것 `200`:
+```json
+{
+  "draft": {
+    "store_name": "같이고기 경기대점",
+    "total_amount": 93000,
+    "items": [
+      { "name": "삼겹살", "amount": 48000, "kind": "ITEM" },
+      { "name": "제휴할인", "amount": -5000, "kind": "DISCOUNT" }
+    ]
+  },
+  "check": { "items_sum": 93000, "difference": 0, "is_matched": true },
+  "warnings": [],
+  "lines": [{ "text": "삼겹살 16,000 3 48,000", "confidence": 1.0, "role": "item" }],
+  "engine": "stub",
+  "elapsed_ms": 2,
+  "receipt": null
+}
+```
+
+- `draft`: '영수증 만들기'에 보내는 칸과 같은 모양 (`payer_member_id`만 없음). 못 찾은 `store_name` · `total_amount`는 `null`이고, 품목이 0개일 수도 있습니다
+- `check`: 영수증의 `check`와 같은 계산. 합계를 못 찾으면 `difference`는 `null`
+- `warnings`: 사용자가 확인할 곳. 화면에 그대로 보여 주세요. `save=true`면 저장하면서 값을 고친 이유가 뒤에 붙습니다
+- `lines`: 줄마다 어떻게 판단했는지 (디버그용)
+- `receipt`: `save=true`로 저장했을 때 저장된 영수증 (영수증 만들기 답장과 같은 모양). 저장하지 않았으면 `null`
+
+`save=true`일 때:
+- 상태는 '확인 중' 그대로입니다. 자동으로 확정하지 않고, 사용자가 확인 화면에서 고친 뒤 확정합니다
+- 결제자는 그대로 두고 가게 이름 · 총액 · 품목을 바꿉니다. 품목은 통째로 바뀌어서, 사진을 다시 올려 다시 읽어도 품목이 겹쳐 쌓이지 않습니다
+- 원래 품목과 그 체크는 지워지고, 새 품목은 영수증 만들기처럼 모든 구성원이 체크된 채로 시작합니다. 화면에서 "지금 입력한 품목이 사진에서 읽은 내용으로 바뀝니다" 확인을 받아 주세요
+- 저장하기 전에 영수증 입력 규칙에 맞게 고칩니다 (고친 이유는 `warnings`에):
+
+| OCR 초안 | 저장하는 값 |
+| --- | --- |
+| 가게 이름 없음 | 원래 가게 이름 그대로 |
+| 가게 이름 · 품목 이름이 50자 넘음 | 앞 50자 |
+| 품목 이름 없음 | `품목 N` (할인 줄은 `할인`) |
+| 금액이 0원 · 1억 원 초과 · 읽을 수 없음 | 그 줄을 뺌 |
+| 할인 줄인데 금액이 양수 | 음수로 |
+| 합계 없음 · 0 이하 · 1억 원 초과 | 품목 합 (할인 포함) |
+| 줄이 100개 넘음 | 앞 100개 |
+| 합계 ≠ 품목 합 | 그대로 저장 (`check` · `warnings`로 알림) |
+
+- 고친 뒤에도 품목이 하나도 없거나 총액을 정할 수 없으면 영수증을 바꾸지 않습니다. `receipt`는 `null`이고 `warnings` 끝에 "… 영수증은 그대로 두었습니다. 직접 입력해 주세요."가 붙습니다
+- 경고는 영수증 테이블에 칸이 없어서 저장되지 않습니다. 이 답장의 `warnings`로만 받습니다. 경고가 없어도 틀릴 수 있으니 확인 화면에서 모든 칸을 고칠 수 있어야 합니다
+
+오류:
+- `404 NOT_FOUND`: 사진을 아직 올리지 않음
+- `409 RECEIPT_CONFIRMED`: `save=true`인데 확정된 영수증 (읽는 사이에 확정된 경우 포함). `save` 없이 읽기만 하는 것은 됩니다
+- `422 IMAGE_UNREADABLE` · `503 OCR_UNAVAILABLE`
+
+실제 엔진은 장당 평균 15.5초(가장 느린 장 26.5초)라 로딩 표시가 필요합니다. 지금은 요청 안에서 기다렸다가 답하고, 작업 큐(Worker) 방식이 정해지면 이 절을 고칩니다.
 
 ---
 
@@ -409,7 +476,7 @@
 | 첫 화면 | `GET /health` |
 | 정산방 만들기 | `POST /rooms` |
 | 정산방 (영수증 목록) | `GET /rooms/{t}` · `GET /rooms/{t}/receipts` |
-| 영수증 입력 · 고치기 | `POST` · `PUT /rooms/{t}/receipts…` · `POST …/photo` |
+| 영수증 입력 · 고치기 | `POST` · `PUT /rooms/{t}/receipts…` · `POST …/photo` · `POST …/photo/ocr` |
 | 확인 · 확정 | `GET …/receipts/{id}` · `POST …/confirm` · `POST …/unconfirm` |
 | 분담 조건 (체크 표) | `GET` · `PUT /rooms/{t}/checks` |
 | 정산 결과 | `GET /rooms/{t}/settlements/latest` · `POST /rooms/{t}/settlements` |

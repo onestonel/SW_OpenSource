@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { api, photoSrc, won } from '../api.js'
-import { useLoad } from '../hooks.js'
+import { getMe, useLoad } from '../hooks.js'
 import { BackLink, CheckIcon, ErrorText, Loading, Page } from '../ui.jsx'
 
 const XIcon = () => (
@@ -34,7 +34,8 @@ export default function ReceiptForm() {
 function Form({ room, receipt }) {
   const navigate = useNavigate()
   const base = `/rooms/${room.room_token}`
-  const init = receipt ? toForm(receipt) : { store: '', payer: null, total: '', lines: [emptyLine()], photoUrl: null }
+  // 새 영수증은 결제자를 '나'(정산방 홈에서 고른 사람)로 미리 골라 둔다
+  const init = receipt ? toForm(receipt) : { store: '', payer: getMe(room.room_token, room.members), total: '', lines: [emptyLine()], photoUrl: null }
   const [store, setStore] = useState(init.store)
   const [payer, setPayer] = useState(init.payer)
   const [lines, setLines] = useState(init.lines)
