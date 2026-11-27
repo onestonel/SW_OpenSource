@@ -75,7 +75,7 @@ function Room({ room, receipts }) {
       <div className="stack-10">
         <h1 className="title">{room.name}</h1>
         <div className="chips">
-          {room.members.map((m) => <span key={m.id} className={`chip${m.id === me ? ' chip--me' : ''}`}>{m.name}{m.id === me && ' (나)'}</span>)}
+          {room.members.map((m) => <span key={m.id} className={`chip${m.id === me ? ' chip--me' : ''}`}>{m.name}</span>)}
           <span className="muted-13">구성원 {room.members.length}명</span>
         </div>
       </div>
