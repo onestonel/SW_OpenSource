@@ -1,0 +1,56 @@
+# DB 마이그레이션 검사: 실제 PostgreSQL에서 올리기 · 내리기 · 다시 올리기를 해 본다.
+# server-test는 SQLite로 돌아서 PostgreSQL에서만 생기는 문제를 못 잡기 때문에 따로 둔다 (11/9 리뷰 메모).
+# 두 사람이 마이그레이션 파일을 동시에 만들어 갈래가 둘로 나뉘면 서버가 켜지지 않으므로 그것도 막는다.
+name: migration-check
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths: ["server/migrations/**", "server/app/models.py", "server/requirements.txt", ".github/workflows/migration-check.yml"]
+  push:
+    branches: [develop, main]
+    paths: ["server/migrations/**", "server/app/models.py", "server/requirements.txt", ".github/workflows/migration-check.yml"]
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: settle
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U app -d settle"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://app:app@localhost:5432/settle
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: 갈래가 하나인지
+        run: |
+          python -m alembic heads
+          n=$(python -m alembic heads | grep -c "(head)")
+          if [ "$n" -ne 1 ]; then
+            echo "::error::마이그레이션 갈래가 ${n}개입니다. develop을 받은 뒤 down_revision을 최신 파일로 맞춰 주세요."
+            exit 1
+          fi
+      - name: 올리기 (upgrade head)
+        run: python -m alembic upgrade head
+      - name: 모델과 마이그레이션이 같은지
+        run: python -m alembic check
+      - name: 내리기 (downgrade base)
+        run: python -m alembic downgrade base
+      - name: 다시 올리기 (upgrade head)
+        run: python -m alembic upgrade head
