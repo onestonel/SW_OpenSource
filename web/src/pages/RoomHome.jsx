@@ -31,8 +31,15 @@ function WhoAmI({ room, onPick }) {
       <form className="stack-12" onSubmit={submit}>
         <div className="field">
           <label htmlFor="me">내 이름</label>
-          <input id="me" className="input" type="text" list="member-names" autoComplete="off" placeholder="예: 민수" value={name} onChange={(e) => setName(e.target.value)} />
-          <datalist id="member-names">{room.members.map((m) => <option key={m.id} value={m.name} />)}</datalist>
+          <input id="me" className="input" type="text" autoComplete="off" placeholder="예: 민수" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        {/* datalist는 브라우저마다 목록이 비어 보이기도 해서, 누르면 이름이 채워지는 버튼으로 보여 준다 */}
+        <div role="group" aria-label="구성원 이름 넣기" className="payer-grid">
+          {room.members.map((m) => (
+            <button key={m.id} type="button" aria-pressed={name.trim() === m.name} className={`payer-btn${name.trim() === m.name ? ' payer-btn--on' : ''}`} onClick={() => { setName(m.name); setError(null) }}>
+              {m.name}
+            </button>
+          ))}
         </div>
         {error && <p className="error-text" role="alert">{error}</p>}
         <button type="submit" className="btn-primary" disabled={!name.trim()}>확인</button>
