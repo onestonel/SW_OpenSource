@@ -47,6 +47,3 @@ export function useMe(token, members) {
   }
   return [members.some((m) => m.id === me) ? me : null, setMe]
 }
-
-// 입력한 이름 → 구성원 (앞뒤 공백 무시, 정확히 같은 이름만)
-export const findMember = (members, name) => members.find((m) => m.name === name.trim()) ?? null

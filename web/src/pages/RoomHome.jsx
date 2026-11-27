@@ -1,7 +1,6 @@
-import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api, won } from '../api.js'
-import { findMember, useLoad, useMe } from '../hooks.js'
+import { useLoad, useMe } from '../hooks.js'
 import { BackLink, Loading, Page, StatusBadge } from '../ui.jsx'
 
 const Chevron = () => (
@@ -15,38 +14,20 @@ export default function RoomHome() {
   return <Room room={data[0]} receipts={data[1]} />
 }
 
-// 정산방에 처음 들어오면(이 브라우저에 고른 사람이 없으면) 구성원 중 누구인지 먼저 묻는다
+// 정산방에 처음 들어오면(이 브라우저에 고른 사람이 없으면) 구성원 중 누구인지 먼저 묻는다. 이름을 누르면 바로 들어간다
 function WhoAmI({ room, onPick }) {
-  const [name, setName] = useState('')
-  const [error, setError] = useState(null)
-  const submit = (e) => {
-    e.preventDefault()
-    const m = findMember(room.members, name)
-    if (m) onPick(m.id)
-    else setError(`구성원에 없는 이름이에요. 구성원: ${room.members.map((x) => x.name).join(', ')}`)
-  }
   return (
     <Page gap={20}>
       <BackLink to="/" label="처음 화면으로" />
-      <div className="stack-6">
-        <h1 className="title">{room.name}</h1>
-      </div>
-      <form className="stack-12" onSubmit={submit}>
-        <div className="field">
-          <label htmlFor="me">본인의 이름을 입력해주세요</label>
-          <input id="me" className="input" type="text" autoComplete="off" placeholder="예: 민수" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        {/* datalist는 브라우저마다 목록이 비어 보이기도 해서, 누르면 이름이 채워지는 버튼으로 보여 준다 */}
-        <div role="group" aria-label="구성원 이름 넣기" className="payer-grid">
+      <h1 className="title">{room.name}</h1>
+      <div className="field">
+        <span id="me-pick" className="field-label">본인의 이름을 골라주세요</span>
+        <div role="group" aria-labelledby="me-pick" className="payer-grid">
           {room.members.map((m) => (
-            <button key={m.id} type="button" aria-pressed={name.trim() === m.name} className={`payer-btn${name.trim() === m.name ? ' payer-btn--on' : ''}`} onClick={() => { setName(m.name); setError(null) }}>
-              {m.name}
-            </button>
+            <button key={m.id} type="button" className="payer-btn" onClick={() => onPick(m.id)}>{m.name}</button>
           ))}
         </div>
-        {error && <p className="error-text" role="alert">{error}</p>}
-        <button type="submit" className="btn-primary" disabled={!name.trim()}>확인</button>
-      </form>
+      </div>
     </Page>
   )
 }
@@ -83,10 +64,11 @@ function Room({ room, receipts }) {
 
       <div className="row-between" style={{ marginTop: 8, alignItems: 'baseline' }}>
         <h2 className="subtitle">영수증</h2>
-        <span className="muted-13">확정 {confirmed} · 확인 중 {receipts.length - confirmed}</span>
+        {receipts.length > 0 && <span className="muted-13">확정 {confirmed} · 확인 중 {receipts.length - confirmed}</span>}
       </div>
 
       <div className="stack-10">
+        {receipts.length === 0 && <p className="card card-pad muted-14" style={{ margin: 0, textAlign: 'center' }}>아직 영수증이 없어요</p>}
         {receipts.map((r) => (
           <Link key={r.id} to={`${base}/receipts/${r.id}`} className="card receipt-card">
             <div className="stack-4 grow">
@@ -105,7 +87,6 @@ function Room({ room, receipts }) {
         </Link>
       </div>
 
-      <div className="spacer" />
       <nav className="card nav-list" aria-label="정산 단계">
         <Link to={`${base}/split`} className="nav-card">
           <span aria-hidden="true" className="nav-card__icon">
