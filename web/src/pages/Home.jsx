@@ -3,8 +3,6 @@ import { Link } from 'react-router'
 import { checkHealth } from '../api.js'
 
 // 첫 화면 미리보기: 명세서 예시 1의 실제 결과 (민수가 항공권 · 식당을 내고, 수아는 술을 안 마심)
-const PREVIEW_RECEIPTS = [['항공권', '400,000'], ['식당', '150,000']]
-const PREVIEW_TRANSFERS = [['지영 → 민수', '145,000'], ['현우 → 민수', '145,000'], ['수아 → 민수', '115,000']]
 
 const STATUS_TEXT = {
   checking: '서버 확인 중…',
@@ -46,39 +44,22 @@ export default function Home() {
 
         <section className="hero">
           <h1>
-            함께 쓴 돈,
+            모든 정산
             <br />
-            항목별로 나눠요
+            AI와 함께해요
           </h1>
-          <p>영수증을 입력하고 품목마다 함께한 사람을 체크하면, 누가 누구에게 얼마를 보내면 되는지 정리해 드려요</p>
+          <p>여행, 데이트, 회식까지 어떤 정산이든 AI로 정산할 수 있어요</p>
         </section>
 
-        {/* 이 앱이 만드는 결과를 그대로 보여 준다: 영수증 한 장 */}
-        <figure className="receipt" style={{ margin: 0 }} aria-label="정산 결과 예시">
-          <div className="receipt__head">
-            <span className="receipt__title">제주 여행 · 정산</span>
-            <span>예시</span>
-          </div>
-          <hr className="receipt__rule" />
-          {PREVIEW_RECEIPTS.map(([name, amount]) => (
-            <div key={name} className="receipt__row muted"><span>{name} · 민수 결제</span><span>{amount}</span></div>
-          ))}
-          <hr className="receipt__rule" />
-          {PREVIEW_TRANSFERS.map(([who, amount]) => (
-            <div key={who} className="receipt__row strong"><span>{who}</span><span>{amount}원</span></div>
-          ))}
-          <hr className="receipt__rule" />
-          <figcaption className="receipt__foot">영수증 입력 → 품목마다 체크 → 송금 목록 복사</figcaption>
-        </figure>
+        <ol className="receipt steps" style={{ margin: 0 }}>
+          <li><span className="steps__num">1</span>정산방 만들기</li>
+          <li><span className="steps__num">2</span>AI와 정산하기</li>
+          <li><span className="steps__num">3</span>결과 공유하기</li>
+        </ol>
 
         <div className="spacer" />
 
-        <Link to="/rooms/new" className="btn-primary">새 정산방 만들기</Link>
-        <p className="footnote">
-          로그인 없이 써요. 이미 만든 정산방은
-          <br />
-          총무님이 저장한 링크로 다시 들어오세요
-        </p>
+        <Link to="/rooms/new" className="btn-primary">정산방 만들기</Link>
       </div>
     </main>
   )

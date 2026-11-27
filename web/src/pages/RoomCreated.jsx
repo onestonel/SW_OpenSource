@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router'
 import { api } from '../api.js'
 import { roomUrl, useCopy, useLoad } from '../hooks.js'
-import { CheckIcon, CopyIcon, Loading, Page, WarnIcon } from '../ui.jsx'
+import { CheckIcon, CopyIcon, Loading, Page, ShareIcon } from '../ui.jsx'
 
 export default function RoomCreated() {
   const { token } = useParams()
@@ -28,12 +28,12 @@ export default function RoomCreated() {
       </div>
 
       <div className="notice-warn">
-        <WarnIcon />
-        <p>로그인이 없어서 <b>이 링크로만 다시 들어올 수 있어요.</b> 총무님이 꼭 저장해 두세요.</p>
+        <ShareIcon />
+        <p>단톡방에 링크를 공유해주세요</p>
       </div>
 
       <div className="spacer" />
-      <Link to={`/rooms/${token}`} className="btn-primary">링크 저장했어요, 정산방으로</Link>
+      <Link to={`/rooms/${token}`} className="btn-primary">정산방으로</Link>
     </Page>
   )
 }

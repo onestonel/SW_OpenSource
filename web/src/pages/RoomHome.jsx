@@ -30,11 +30,10 @@ function WhoAmI({ room, onPick }) {
       <BackLink to="/" label="처음 화면으로" />
       <div className="stack-6">
         <h1 className="title">{room.name}</h1>
-        <p className="muted-14">이 정산방에서 누구인지 알려 주세요. 영수증을 넣을 때 결제자를 본인으로 미리 골라 둘게요.</p>
       </div>
       <form className="stack-12" onSubmit={submit}>
         <div className="field">
-          <label htmlFor="me">내 이름</label>
+          <label htmlFor="me">본인의 이름을 입력해주세요</label>
           <input id="me" className="input" type="text" autoComplete="off" placeholder="예: 민수" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         {/* datalist는 브라우저마다 목록이 비어 보이기도 해서, 누르면 이름이 채워지는 버튼으로 보여 준다 */}
@@ -47,7 +46,6 @@ function WhoAmI({ room, onPick }) {
         </div>
         {error && <p className="error-text" role="alert">{error}</p>}
         <button type="submit" className="btn-primary" disabled={!name.trim()}>확인</button>
-        <p className="muted-13">이 브라우저에만 저장돼요. 정산방 설정에서 바꿀 수 있어요.</p>
       </form>
     </Page>
   )
@@ -80,7 +78,6 @@ function Room({ room, receipts }) {
         <h1 className="title">{room.name}</h1>
         <div className="chips">
           {room.members.map((m) => <span key={m.id} className={`chip${m.id === me ? ' chip--me' : ''}`}>{m.name}</span>)}
-          <span className="muted-13">구성원 {room.members.length}명</span>
         </div>
       </div>
 
@@ -104,10 +101,9 @@ function Room({ room, receipts }) {
         ))}
         <Link to={`${base}/receipts/new`} className="add-dashed">
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-          영수증 추가
+          영수증 넣기
         </Link>
       </div>
-      <p className="muted-13">확정한 영수증만 정산에 들어가요</p>
 
       <div className="spacer" />
       <nav className="card nav-list" aria-label="정산 단계">
@@ -116,8 +112,7 @@ function Room({ room, receipts }) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M8 12l3 3 5-6" /></svg>
           </span>
           <span className="stack-4">
-            <span className="strong-16">분담 조건</span>
-            <span className="muted-13">품목마다 체크</span>
+            <span className="strong-16">정산 조건</span>
           </span>
           <Chevron />
         </Link>

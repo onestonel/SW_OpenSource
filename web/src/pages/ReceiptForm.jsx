@@ -86,7 +86,7 @@ function Form({ room, receipt }) {
     <Page gap={16}>
       <div className="row-gap-12">
         <BackLink to={receipt ? `${base}/receipts/${receipt.id}` : base} />
-        <h1 className="title" style={{ fontSize: 24 }}>{receipt ? '영수증 고치기' : '영수증 추가'}</h1>
+        <h1 className="title" style={{ fontSize: 24 }}>{receipt ? '영수증 고치기' : '영수증 넣기'}</h1>
       </div>
 
       {/* 사진은 크게 보기를 켜면 위에 붙어 있어서, 스크롤하며 입력칸과 같이 볼 수 있다 */}
@@ -97,7 +97,6 @@ function Form({ room, receipt }) {
         {!bigPhoto && (
           <div className="stack-4 grow">
             <span className="strong" style={{ fontSize: 15 }}>영수증 사진 <span className="muted" style={{ fontWeight: 400 }}>(선택)</span></span>
-            <span className="muted-13" style={{ lineHeight: 1.5 }}>사진을 보면서 아래 칸을 채워요. 자동 인식은 V2에서 돼요.</span>
           </div>
         )}
         <div className="photo-card__actions">
@@ -152,13 +151,13 @@ function Form({ room, receipt }) {
             ))}
             <div className="line-actions">
               <button type="button" className="chip-btn" onClick={() => setLines([...lines, emptyLine()])}>+ 품목 추가</button>
-              <button type="button" className="chip-btn chip-btn--gray" onClick={() => setLines([...lines, emptyLine('DISCOUNT')])}>+ 할인 (−금액)</button>
+              <button type="button" className="chip-btn chip-btn--gray" onClick={() => setLines([...lines, emptyLine('DISCOUNT')])}>+ 할인</button>
             </div>
           </div>
         </div>
 
         <div className="field">
-          <label htmlFor="total">총액 <span className="muted" style={{ fontWeight: 400 }}>(영수증에 찍힌 금액)</span></label>
+          <label htmlFor="total">영수증 총액</label>
           <input
             id="total" className="input input--total" type="text" inputMode="numeric" placeholder="0"
             value={money(total)} onChange={(e) => setTotal(digits(e.target.value))}
@@ -177,7 +176,6 @@ function Form({ room, receipt }) {
           labels={{ store_name: '가게 이름', payer_member_id: '결제자', total_amount: '총액', items: '품목', name: '이름', amount: '금액' }}
         />
         <button type="submit" className="btn-primary" disabled={busy}>저장</button>
-        <p className="muted-13" style={{ textAlign: 'center' }}>저장하면 '확인 중' 상태가 돼요. 합이 안 맞아도 저장돼요.</p>
       </form>
     </Page>
   )

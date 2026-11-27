@@ -59,40 +59,18 @@ export default function Result() {
         </div>
       )}
 
-      {!s && <p className="card card-pad muted-14">영수증을 확정하고 분담 조건을 정한 뒤 '다시 계산'을 눌러주세요.</p>}
+      {!s && <p className="card card-pad muted-14">정산에 넣을 영수증이 없어요</p>}
 
       {s && (
         <>
           {s.excluded_receipts.length > 0 && (
-            <p className="muted-13">확정 안 된 영수증 {s.excluded_receipts.length}개는 빠졌어요: {s.excluded_receipts.map((r) => r.store_name).join(', ')}</p>
+            <p className="muted-13">확인 중인 영수증 {s.excluded_receipts.length}장은 빠졌어요 ({s.excluded_receipts.map((r) => r.store_name).join(', ')})</p>
           )}
-
-          <section className="stack-6" style={{ gap: 8 }}>
-            <h2 className="subtitle" style={{ fontSize: 16 }}>사람별</h2>
-            <table className="card result-table">
-              <thead>
-                <tr><th scope="col"><span className="visually-hidden">이름</span></th><th scope="col">낸 돈</th><th scope="col">내야 할 돈</th><th scope="col">결과</th></tr>
-              </thead>
-              <tbody>
-                {s.members.map((m) => (
-                  <tr key={m.member_id}>
-                    <th scope="row">{m.name}</th>
-                    <td>{won(m.paid)}</td>
-                    <td>{won(m.owed)}</td>
-                    <td className={m.net > 0 ? 'net-plus' : m.net < 0 ? 'net-minus' : ''}>
-                      {m.net > 0 ? `${won(m.net)} 받음` : m.net < 0 ? `${won(-m.net)} 보냄` : '0'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
 
           {/* 이 화면의 볼거리: 송금 목록을 영수증 한 장으로 */}
           <section className="receipt">
             <div className="receipt__head">
-              <h2 className="receipt__title" style={{ margin: 0 }}>송금 목록</h2>
-              <span>버전 {s.version}</span>
+              <h2 className="receipt__title" style={{ margin: 0 }}>송금할 금액</h2>
             </div>
             <hr className="receipt__rule" />
             <ul className="transfer-list">
@@ -107,7 +85,27 @@ export default function Result() {
             <hr className="receipt__rule" />
             <p className="receipt__foot">원 단위 {s.rounding === 'WON_10' ? '10원 올림' : '1원'} · {when(s.created_at)}</p>
           </section>
-          <p className="muted-13">영수증마다 '→ 결제자'를 만들고, 같은 두 사람 사이는 하나로 합쳤어요</p>
+
+          <details className="more">
+            <summary>세부내용</summary>
+            <table className="card result-table">
+              <thead>
+                <tr><th scope="col"><span className="visually-hidden">이름</span></th><th scope="col">낸 돈</th><th scope="col">낼 돈</th><th scope="col">결과</th></tr>
+              </thead>
+              <tbody>
+                {s.members.map((m) => (
+                  <tr key={m.member_id}>
+                    <th scope="row">{m.name}</th>
+                    <td>{won(m.paid)}</td>
+                    <td>{won(m.owed)}</td>
+                    <td className={m.net > 0 ? 'net-plus' : m.net < 0 ? 'net-minus' : ''}>
+                      {m.net > 0 ? `${won(m.net)} 받음` : m.net < 0 ? `${won(-m.net)} 보냄` : '0'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
 
           <div className="spacer" />
           {copied && (
@@ -118,7 +116,7 @@ export default function Result() {
             </div>
           )}
           <button type="button" className="btn-primary" onClick={() => copy(s.copy_text)} style={{ gap: 8 }}>
-            <CopyIcon /> 송금 목록 복사
+            <CopyIcon /> 단톡방에 올릴 내용 복사
           </button>
         </>
       )}

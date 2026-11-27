@@ -44,16 +44,13 @@ export default function Settings() {
       <h1 className="title">정산방 설정</h1>
 
       <div className="field">
-        <span className="field-label">원 단위</span>
         <RoundingSwitch value={room.rounding} onChange={changeRounding} disabled={busy} />
         <ErrorText error={saveError} />
-        <p className="muted-13">바꾸면 정산 결과가 '최신 아님'으로 바뀌어요</p>
       </div>
 
       <div className="field">
-        <span id="me-label" className="field-label">나는 누구</span>
+        <span id="me-label" className="field-label">내 이름</span>
         <MePicker token={token} members={room.members} />
-        <p className="muted-13">이 브라우저에만 저장돼요. 새 영수증의 결제자를 이 사람으로 미리 골라 둬요.</p>
       </div>
 
       <div className="field">
@@ -76,7 +73,7 @@ export default function Settings() {
           <button type="button" className="btn-pill" onClick={() => copy(url)}>복사</button>
         </div>
         {copied && <p role="status" className="copied">링크를 복사했어요</p>}
-        <p className="muted-13">이 링크가 있으면 누구나 정산방을 열 수 있어요. 총무님만 보관해 주세요.</p>
+        <p className="muted-13">링크를 아는 사람은 누구나 들어올 수 있어요</p>
       </div>
     </Page>
   )
