@@ -46,7 +46,7 @@ export default function Result() {
           <span className="muted-14">{s ? `버전 ${s.version} · ${when(s.created_at)}` : '아직 계산 전'}</span>
         </div>
         <button type="button" className="btn-pill recalc-btn" disabled={busy} onClick={recalc}>
-          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 5v6h-6" /></svg>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 5v6h-6" /></svg>
           {busy ? '계산 중…' : '다시 계산'}
         </button>
       </div>
@@ -88,10 +88,15 @@ export default function Result() {
             </table>
           </section>
 
-          <section className="stack-6" style={{ gap: 8 }}>
-            <h2 className="subtitle" style={{ fontSize: 16 }}>송금 목록</h2>
-            <ul className="glass transfer-list">
-              {s.transfers.length === 0 && <li className="muted-14">보낼 돈이 없어요.</li>}
+          {/* 이 화면의 볼거리: 송금 목록을 영수증 한 장으로 */}
+          <section className="receipt">
+            <div className="receipt__head">
+              <h2 className="receipt__title" style={{ margin: 0 }}>송금 목록</h2>
+              <span>버전 {s.version}</span>
+            </div>
+            <hr className="receipt__rule" />
+            <ul className="transfer-list">
+              {s.transfers.length === 0 && <li className="muted-14">보낼 돈이 없어요</li>}
               {s.transfers.map((tr) => (
                 <li key={`${tr.from.id}-${tr.to.id}`} style={tr.explanation ? { flexWrap: 'wrap' } : undefined}>
                   <span>{tr.from.name} → {tr.to.name}</span><span>{won(tr.amount)}원</span>
@@ -99,10 +104,10 @@ export default function Result() {
                 </li>
               ))}
             </ul>
-            <p className="muted-13">
-              영수증마다 '→ 결제자'를 만들고, 같은 두 사람 사이는 하나로 합쳤어요. 원 단위: {s.rounding === 'WON_10' ? '10원 올림' : '1원 (기본)'}
-            </p>
+            <hr className="receipt__rule" />
+            <p className="receipt__foot">원 단위 {s.rounding === 'WON_10' ? '10원 올림' : '1원'} · {when(s.created_at)}</p>
           </section>
+          <p className="muted-13">영수증마다 '→ 결제자'를 만들고, 같은 두 사람 사이는 하나로 합쳤어요</p>
 
           <div className="spacer" />
           {copied && (

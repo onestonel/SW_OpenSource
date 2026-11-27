@@ -39,11 +39,11 @@ export default function ReceiptDetail() {
   return (
     <Page>
       <BackLink to={base} label="정산방으로" />
-      <div className="row-gap-12" style={{ gap: 10 }}>
+      <div className="row-gap-12" style={{ gap: 12 }}>
         <h1 className="title">{r.store_name}</h1>
         <StatusBadge status={r.status} />
       </div>
-      <p className="muted-14" style={{ marginTop: -10 }}>
+      <p className="muted-14" style={{ marginTop: -8 }}>
         결제 {r.payer.name} · {confirmed ? '정산에 들어가요' : r.photo_url ? '영수증 사진 있음' : '사진 없음'}
       </p>
 
@@ -60,14 +60,14 @@ export default function ReceiptDetail() {
 
       {confirmed ? (
         <div className="notice-plain">
-          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#55555C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flex: 'none', marginTop: 2 }}>
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flex: 'none', marginTop: 2 }}>
             <rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
           </svg>
           <p>확정한 영수증은 바로 고치거나 지울 수 없어요. <b>확정 취소</b>를 누르면 '확인 중'으로 돌아가고, 그때 고치거나 지울 수 있어요.</p>
         </div>
       ) : (
         <>
-          <div className="grid-2" style={{ gap: 10 }}>
+          <div className="grid-2" style={{ gap: 12 }}>
             <div className="sum-box"><span className="muted-13">품목 합</span><span className="sum-box__value">{won(items_sum)}원</span></div>
             <div className="sum-box"><span className="muted-13">총액</span><span className="sum-box__value">{won(r.total_amount)}원</span></div>
           </div>
@@ -94,11 +94,11 @@ export default function ReceiptDetail() {
         </>
       ) : (
         <>
-          <div className="grid-2" style={{ gap: 10 }}>
+          <div className="grid-2" style={{ gap: 12 }}>
             <Link to={`${base}/receipts/${r.id}/edit`} className="btn-secondary btn-secondary--lg">고치기</Link>
             <button type="button" className="btn-primary" disabled={busy} onClick={confirm}>확정</button>
           </div>
-          <p className="muted-13" style={{ textAlign: 'center' }}>확정한 영수증만 정산에 들어가요.</p>
+          <p className="muted-13" style={{ textAlign: 'center' }}>확정한 영수증만 정산에 들어가요</p>
           <button type="button" className="btn-text" disabled={busy} onClick={remove}>영수증 지우기</button>
         </>
       )}

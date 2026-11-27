@@ -56,7 +56,7 @@ export default function AiLog() {
 
       <section className="stack-6" style={{ gap: 8 }}>
         <h2 className="subtitle" style={{ fontSize: 16 }}>기록</h2>
-        {entries.length === 0 && <p className="muted-14">아직 AI 총무에게 말한 적이 없어요.</p>}
+        {entries.length === 0 && <p className="muted-14">아직 AI 총무에게 말한 적이 없어요</p>}
         <ul className="glass ailog-list">
           {entries.map((e) => (
             <li key={e.id}>

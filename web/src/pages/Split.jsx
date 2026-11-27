@@ -87,7 +87,7 @@ function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
             const empty = ids.length === 0
             return (
               <div key={it.item_id} className={`check-grid check-grid--row${flash.includes(it.item_id) ? ' check-grid--flash' : ''}`} style={cols}>
-                <div className="stack-4" style={{ gap: 1, minWidth: 0 }}>
+                <div className="stack-4" style={{ gap: 2, minWidth: 0 }}>
                   <span style={{ fontSize: 15 }}>{it.name}</span>
                   {empty
                     ? <span className="check-hint check-hint--error">최소 1명을 체크하세요</span>
@@ -100,7 +100,7 @@ function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
                       <input type="checkbox" className="visually-hidden" checked={on} aria-label={`${it.name} ${m.name}`} onChange={() => toggle(it.item_id, m.id)} />
                       <span aria-hidden="true" className={`check-box${on ? ' check-box--on' : ''}${empty ? ' check-box--error' : ''}`}>
                         {on && (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--card)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
                         )}
                       </span>
                     </label>

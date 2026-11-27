@@ -33,7 +33,7 @@ export default function Settings() {
         <span className="field-label">원 단위</span>
         <RoundingSwitch value={room.rounding} onChange={changeRounding} disabled={busy} />
         <ErrorText error={saveError} />
-        <p className="muted-13">바꾸면 정산 결과가 '최신 아님'으로 바뀌어요.</p>
+        <p className="muted-13">바꾸면 정산 결과가 '최신 아님'으로 바뀌어요</p>
       </div>
 
       <div className="field">

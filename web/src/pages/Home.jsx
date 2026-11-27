@@ -2,11 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { checkHealth } from '../api.js'
 
-const STEPS = [
-  { title: '영수증 입력', desc: '사진을 보면서 품목과 금액을 적어요' },
-  { title: '체크로 분담', desc: '품목마다 함께한 사람을 골라요' },
-  { title: '송금 목록 복사', desc: '단톡에 붙여 넣으면 끝' },
-]
+// 첫 화면 미리보기: 명세서 예시 1의 실제 결과 (민수가 항공권 · 식당을 내고, 수아는 술을 안 마심)
+const PREVIEW_RECEIPTS = [['항공권', '400,000'], ['식당', '150,000']]
+const PREVIEW_TRANSFERS = [['지영 → 민수', '145,000'], ['현우 → 민수', '145,000'], ['수아 → 민수', '115,000']]
 
 const STATUS_TEXT = {
   checking: '서버 확인 중…',
@@ -36,7 +34,7 @@ export default function Home() {
       <div className="page-inner">
         <header className="brand">
           <div className="brand__logo" aria-hidden="true">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
               <path d="M9 8h6" />
               <path d="M9 12h6" />
@@ -52,20 +50,26 @@ export default function Home() {
             <br />
             항목별로 나눠요
           </h1>
-          <p>영수증을 입력하고 품목마다 함께한 사람을 체크하면, 누가 누구에게 얼마를 보내면 되는지 정리해 드려요.</p>
+          <p>영수증을 입력하고 품목마다 함께한 사람을 체크하면, 누가 누구에게 얼마를 보내면 되는지 정리해 드려요</p>
         </section>
 
-        <ol className="steps glass">
-          {STEPS.map((step, i) => (
-            <li key={step.title} className="steps__item">
-              <span className="steps__num" aria-hidden="true">{i + 1}</span>
-              <div>
-                <strong>{step.title}</strong>
-                <span>{step.desc}</span>
-              </div>
-            </li>
+        {/* 이 앱이 만드는 결과를 그대로 보여 준다: 영수증 한 장 */}
+        <figure className="receipt" style={{ margin: 0 }} aria-label="정산 결과 예시">
+          <div className="receipt__head">
+            <span className="receipt__title">제주 여행 · 정산</span>
+            <span>예시</span>
+          </div>
+          <hr className="receipt__rule" />
+          {PREVIEW_RECEIPTS.map(([name, amount]) => (
+            <div key={name} className="receipt__row muted"><span>{name} · 민수 결제</span><span>{amount}</span></div>
           ))}
-        </ol>
+          <hr className="receipt__rule" />
+          {PREVIEW_TRANSFERS.map(([who, amount]) => (
+            <div key={who} className="receipt__row strong"><span>{who}</span><span>{amount}원</span></div>
+          ))}
+          <hr className="receipt__rule" />
+          <figcaption className="receipt__foot">영수증 입력 → 품목마다 체크 → 송금 목록 복사</figcaption>
+        </figure>
 
         <div className="spacer" />
 
@@ -73,7 +77,7 @@ export default function Home() {
         <p className="footnote">
           로그인 없이 써요. 이미 만든 정산방은
           <br />
-          총무님이 저장한 링크로 다시 들어오세요.
+          총무님이 저장한 링크로 다시 들어오세요
         </p>
       </div>
     </main>
