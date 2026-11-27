@@ -223,7 +223,7 @@ const routes = [
   }],
   ['POST', /^\/rooms\/([^/]+)\/checks\/interpret$/, (_db, [r], body) => interpretStub(r, body.text ?? '', body.previous)],
   ['GET', /^\/rooms\/([^/]+)\/checks\/ai-log$/, () => ({ summary: { total: 0, by_status: {}, by_outcome: {}, proposals: 0, applied: 0, apply_rate: null,
-    fixed_after_apply: 0, fix_rate: null, repairs: {}, repaired_entries: 0, rule_matrix: { rows: [], cols: [], cells: [] }, elapsed_ms: { avg: null, max: null } }, entries: [] })],
+    fixed_after_apply: 0, fix_rate: null, repairs: {}, repaired_entries: 0, escalated: 0, rule_matrix: { rows: [], cols: [], cells: [] }, elapsed_ms: { avg: null, max: null } }, entries: [] })],
   ['POST', /^\/rooms\/([^/]+)\/checks\/apply$/, (_db, [r], body) => {
     if (body.changes.some((c) => !c.member_ids.length)) fail(422, 'CHECK_EMPTY', '아무도 체크하지 않은 품목이 있어요. 품목마다 1명 이상 체크해주세요.')
     for (const { item_id, member_ids, amount } of body.changes) {
