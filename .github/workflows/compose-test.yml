@@ -1,0 +1,30 @@
+# docker compose로 DB와 서버를 실제로 켜고, 새 영수증 흐름을 처음부터 끝까지 한 번 돌려 본다.
+# 팀원이 각자 컴퓨터에서 쓰는 docker-compose.yml을 그대로 쓰기 때문에, compose 설정이 깨지면 여기서 먼저 알 수 있다.
+name: compose-test
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths: ["docker-compose.yml", "server/**", ".github/workflows/compose-test.yml"]
+  push:
+    branches: [develop, main]
+    paths: ["docker-compose.yml", "server/**", ".github/workflows/compose-test.yml"]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: DB와 서버 켜기
+        # 서버의 healthcheck(/api/v1/health)가 통과할 때까지 기다린다
+        run: docker compose up -d --wait --wait-timeout 300 db server
+      - name: 새 영수증 흐름 돌려 보기
+        run: python3 server/scripts/smoke_test.py http://localhost:8000/api/v1
+      - name: 실패하면 서버 로그 보기
+        if: failure()
+        run: docker compose logs server db
+      - name: 끄기
+        # CI 컴퓨터는 매번 새로 만들어지므로 여기서는 -v로 지워도 된다 (각자 컴퓨터에서는 -v를 쓰지 않는다)
+        if: always()
+        run: docker compose down -v

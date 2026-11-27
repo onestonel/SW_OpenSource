@@ -70,6 +70,18 @@ feature/{이슈번호}-{기능명}   예: feature/12-settlement-engine
 - 자동 테스트 통과
 - API가 바뀌는 PR은 프론트엔드 담당도 리뷰
 
+### 자동 테스트 (GitHub Actions)
+
+develop · main으로 가는 PR과 push에서 돌아갑니다. 바꾼 폴더에 해당하는 것만 돕니다.
+
+| 이름 | 하는 일 | 언제 돌아가는지 |
+| --- | --- | --- |
+| `server-test` | 서버 코드 검사(ruff)와 테스트(pytest) | `server/`를 바꿨을 때 |
+| `web-test` | 화면 코드 검사, 테스트, 빌드 | `web/`을 바꿨을 때 |
+| `migration-check` | 실제 PostgreSQL에서 마이그레이션 올리기 · 내리기 · 다시 올리기, 갈래가 하나인지, 모델과 같은지 | `server/migrations/`나 `models.py`를 바꿨을 때 |
+| `compose-test` | `docker compose`로 DB와 서버를 켜고 새 영수증 흐름을 처음부터 끝까지 돌려 봄 (`server/scripts/smoke_test.py`) | `docker-compose.yml`이나 `server/`를 바꿨을 때 |
+| `pr-title` | PR 제목 앞에 `feat:` 같은 종류가 붙었는지 | 모든 PR |
+
 ### 시연 전: release
 
 ```bash
