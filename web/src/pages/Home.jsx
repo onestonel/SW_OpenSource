@@ -2,11 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { checkHealth } from '../api.js'
 
-const STEPS = [
-  { title: '영수증 입력', desc: '사진을 보면서 품목과 금액을 적어요' },
-  { title: '체크로 분담', desc: '품목마다 함께한 사람을 골라요' },
-  { title: '송금 목록 복사', desc: '단톡에 붙여 넣으면 끝' },
-]
+// 첫 화면 미리보기: 명세서 예시 1의 실제 결과 (민수가 항공권 · 식당을 내고, 수아는 술을 안 마심)
 
 const STATUS_TEXT = {
   checking: '서버 확인 중…',
@@ -36,7 +32,7 @@ export default function Home() {
       <div className="page-inner">
         <header className="brand">
           <div className="brand__logo" aria-hidden="true">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
               <path d="M9 8h6" />
               <path d="M9 12h6" />
@@ -48,33 +44,22 @@ export default function Home() {
 
         <section className="hero">
           <h1>
-            함께 쓴 돈,
+            모든 정산
             <br />
-            항목별로 나눠요
+            AI와 함께해요
           </h1>
-          <p>영수증을 입력하고 품목마다 함께한 사람을 체크하면, 누가 누구에게 얼마를 보내면 되는지 정리해 드려요.</p>
+          <p>여행, 데이트, 회식까지 어떤 정산이든 AI로 정산할 수 있어요</p>
         </section>
 
-        <ol className="steps glass">
-          {STEPS.map((step, i) => (
-            <li key={step.title} className="steps__item">
-              <span className="steps__num" aria-hidden="true">{i + 1}</span>
-              <div>
-                <strong>{step.title}</strong>
-                <span>{step.desc}</span>
-              </div>
-            </li>
-          ))}
+        <ol className="receipt steps" style={{ margin: 0 }}>
+          <li><span className="steps__num">1</span>정산방 만들기</li>
+          <li><span className="steps__num">2</span>AI와 정산하기</li>
+          <li><span className="steps__num">3</span>결과 공유하기</li>
         </ol>
 
         <div className="spacer" />
 
-        <Link to="/rooms/new" className="btn-primary">새 정산방 만들기</Link>
-        <p className="footnote">
-          로그인 없이 써요. 이미 만든 정산방은
-          <br />
-          총무님이 저장한 링크로 다시 들어오세요.
-        </p>
+        <Link to="/rooms/new" className="btn-primary">정산방 만들기</Link>
       </div>
     </main>
   )

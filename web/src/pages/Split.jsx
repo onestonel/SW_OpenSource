@@ -61,12 +61,11 @@ function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
     <Page gap={16}>
       <BackLink to={base} />
       <div className="stack-6">
-        <h1 className="title">분담 조건</h1>
-        <p className="muted-14">품목마다 함께한 사람을 체크하세요. 체크한 사람끼리 똑같이 나눠요. 확정한 영수증만 보여요.</p>
+        <h1 className="title">AI에게 말하기</h1>
       </div>
 
       {groups.length === 0 && (
-        <div className="glass card-pad stack-12">
+        <div className="card card-pad stack-12">
           <p className="muted-14">아직 확정한 영수증이 없어요. 영수증을 확정하면 여기에 품목이 나와요.</p>
           <Link to={base} className="btn-secondary">정산방으로</Link>
         </div>
@@ -75,7 +74,7 @@ function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
       {groups.length > 0 && <SayBox token={token} members={members} chat={chat} setChat={setChat} onApplied={onApplied} />}
 
       {groups.map((rows) => (
-        <div key={rows[0].receipt_id} className="glass check-card">
+        <div key={rows[0].receipt_id} className="card check-card">
           <div className="check-grid check-grid--head" style={cols}>
             <span className="strong" style={{ fontSize: 15 }}>
               {rows[0].store_name} <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>· 결제 {payerOf[rows[0].receipt_id]}</span>
@@ -87,11 +86,11 @@ function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
             const empty = ids.length === 0
             return (
               <div key={it.item_id} className={`check-grid check-grid--row${flash.includes(it.item_id) ? ' check-grid--flash' : ''}`} style={cols}>
-                <div className="stack-4" style={{ gap: 1, minWidth: 0 }}>
+                <div className="stack-4" style={{ gap: 2, minWidth: 0 }}>
                   <span style={{ fontSize: 15 }}>{it.name}</span>
                   {empty
-                    ? <span className="check-hint check-hint--error">최소 1명을 체크하세요</span>
-                    : <span className="check-hint">{won(it.amount)} · {ids.length}명</span>}
+                    ? <span className="check-hint check-hint--error">낼 사람을 골라 주세요</span>
+                    : <span className="check-hint">{ids.length}명 · 1인 {won(Math.ceil(it.amount / ids.length))}원</span>}
                 </div>
                 {members.map((m) => {
                   const on = ids.includes(m.id)
@@ -100,7 +99,7 @@ function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
                       <input type="checkbox" className="visually-hidden" checked={on} aria-label={`${it.name} ${m.name}`} onChange={() => toggle(it.item_id, m.id)} />
                       <span aria-hidden="true" className={`check-box${on ? ' check-box--on' : ''}${empty ? ' check-box--error' : ''}`}>
                         {on && (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--card)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
                         )}
                       </span>
                     </label>
@@ -114,7 +113,6 @@ function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
 
       {groups.length > 0 && (
         <>
-          <p className="muted-13">새 품목은 전원 체크로 시작해요. 품목마다 최소 1명은 체크해야 저장돼요. 할인은 그 영수증 참여자끼리 똑같이 나눠요.</p>
           <div className="spacer" />
           <ErrorText error={error} />
           <button type="button" className="btn-primary" disabled={busy} onClick={save}>저장</button>
@@ -175,10 +173,9 @@ function SayBox({ token, members, chat, setChat, onApplied }) {
   }
 
   return (
-    <form className="glass card-pad stack-10" onSubmit={ask}>
+    <form className="card card-pad stack-10" onSubmit={ask}>
       <div className="stack-4">
-        <label htmlFor="say" className="field-label">AI 총무에게 말하기</label>
-        <span className="muted-13">예: 현우는 술 안 마셨어 · 패러글라이딩은 지영이랑 현우만 탔어 · 현우랑 수아는 숙소비 보냈어</span>
+        <label htmlFor="say" className="visually-hidden">AI에게 말하기</label>
       </div>
       {chat.length > 0 && (
         <div className="chat">
@@ -207,12 +204,12 @@ function SayBox({ token, members, chat, setChat, onApplied }) {
       )}
       <div className="say-row">
         <input id="say" className="input" type="text" maxLength={200} disabled={busy} value={text} onChange={(e) => setText(e.target.value)}
-          placeholder={previous ? '답을 입력하세요' : '예: 수아는 아침 안 먹었어'} />
+          placeholder={previous ? '답을 입력하세요' : '어떤 항목을 수정할까요?'} />
         <button type="submit" className="btn-secondary say-btn" disabled={busy || !text.trim()}>{busy ? '읽는 중…' : '보내기'}</button>
       </div>
       {busy && <p className="muted-13">AI가 읽고 있어요. 5~10초 걸려요.</p>}
       <ErrorText error={error} />
-      <Link to={`/rooms/${token}/ai-log`} className="muted-13" style={{ alignSelf: 'flex-end' }}>AI 총무 기록 보기 →</Link>
+      <Link to={`/rooms/${token}/ai-log`} className="muted-13" style={{ alignSelf: 'flex-end' }}>AI 현황 보기 →</Link>
     </form>
   )
 }

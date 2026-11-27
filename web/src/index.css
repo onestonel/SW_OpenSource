@@ -1,18 +1,38 @@
-/* 디자인 값: HANDOFF 7. 화면 목업 · 디자인 값 */
-:root {
-  --text: #1c1c1e;
-  --text-sub: #55555c;
-  --link: #0a5fcc;
-  --success: #17753a;
-  --success-bg: rgba(30, 158, 74, 0.12);
-  --error: #b42323;
-  --glass-bg: rgba(255, 255, 255, 0.62);
-  --glass-border: rgba(255, 255, 255, 0.9);
-  --glass-shadow: 0 4px 16px rgba(30, 41, 59, 0.06);
-  --primary: linear-gradient(135deg, #0a6af0, #5b4fe0);
+/* 디자인 방향 (Issue #43): 영수증 종이와 계산대
+   - 그라데이션 · 흐린 색 덩어리(배경의 원) · 반투명 유리 카드 · 색 그림자는 쓰지 않는다
+     (AI가 평균적으로 고르는 남보라 계열 · 흐린 원 두 개 + 유리 카드 배치가 대표적인 AI 티라서)
+   - 간격은 4px 격자, 굵기는 400 · 500, 금액은 고정폭 숫자(IBM Plex Mono)
 
-  font-family: 'Noto Sans KR', -apple-system, 'Apple SD Gothic Neo', sans-serif;
+   색의 근거 — 앱이 다루는 실제 물건에서 가져왔다
+   - 바탕 · 카드: 영수증 감열지의 누런 흰색. 순백(#fff) 대신 노란 기가 조금 도는 미색
+   - 글자: 영수증 인쇄 잉크. 순검정 대신 따뜻한 먹색
+   - 강조(하나뿐): 도장 인주의 주홍. 안료 주홍(vermilion, 흔히 #E34234)과 같은 색상각 5°로 두고,
+     흰 글자 · 글자색으로 쓸 때 WCAG AA(4.5:1)를 넘도록 명도만 낮췄다
+   - 대비는 모두 계산해 확인했다 (괄호: 바탕 #f7f4ee 위 / 흰 글자) */
+:root {
+  --bg: #f7f4ee;        /* 바탕: 감열지 */
+  --card: #fdfbf7;      /* 카드 · 입력칸 */
+  --raised: #efe9df;    /* 눌린 칸 · 칩 */
+  --text: #1f1b16;      /* 잉크 (15.6:1) */
+  --text-sub: #5e554a;  /* (6.7:1) */
+  --muted: #6f665a;     /* 날짜 · 개수 같은 보조 글자 (5.1:1, 칩 위 4.7:1) */
+  --line: rgba(31, 27, 22, 0.08);
+  --line-strong: rgba(31, 27, 22, 0.16);
+  --accent: #b8372a;    /* 인주 주홍 — 색상각 5° (5.3:1 / 흰 글자 5.8:1) */
+  --accent-press: #9a2d22;
+  --success: #1f7a4d;   /* (4.8:1) */
+  --success-bg: rgba(31, 122, 77, 0.1);
+  --warn: #8a5a14;      /* (5.4:1) */
+  --warn-bg: rgba(138, 90, 20, 0.1);
+  --error: #9b1c31;     /* 진홍 — 강조 주홍과 헷갈리지 않게 색상각 350°, 더 어둡게 (7.4:1) */
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  font-family: 'IBM Plex Sans KR', -apple-system, 'Apple SD Gothic Neo', sans-serif;
   color: var(--text);
+  font-variant-numeric: tabular-nums;
+  word-break: keep-all; /* 한글을 낱말 중간에서 끊지 않는다 */
+  overflow-wrap: anywhere; /* 아주 긴 링크 · 이름은 그래도 줄을 넘긴다 */
   -webkit-font-smoothing: antialiased;
 }
 
@@ -23,14 +43,19 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: linear-gradient(160deg, #f4f7ff 0%, #f7f5ff 100%);
+  background: var(--bg);
 }
 
 a {
-  color: var(--link);
+  color: var(--text);
 }
 
-/* 휴대폰 폭(390px) 기준 화면 틀 + 배경의 흐린 원 2개 */
+/* 강조는 600까지 (기본 700은 너무 굵다) */
+b, strong, th {
+  font-weight: 600;
+}
+
+/* 휴대폰 폭(390px) 기준 화면 틀 */
 .page {
   position: relative;
   max-width: 390px;
@@ -40,50 +65,21 @@ a {
   overflow: clip; /* hidden은 position: sticky(사진 크게 보기)를 막는다 */
 }
 
-.page::before,
-.page::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(70px);
-  pointer-events: none;
-}
-
-.page::before {
-  left: -120px;
-  top: -110px;
-  width: 340px;
-  height: 340px;
-  background: #c9dcff;
-  opacity: 0.75;
-}
-
-.page::after {
-  right: -140px;
-  bottom: -120px;
-  width: 360px;
-  height: 360px;
-  background: #dcd6ff;
-  opacity: 0.7;
-}
-
 .page-inner {
   position: relative;
-  z-index: 1;
   min-height: 100vh;
-  padding: 64px 24px 40px;
+  padding: 48px 24px 40px;
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
-.glass {
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  box-shadow: var(--glass-shadow);
+/* 카드 (예전 이름 .glass): 종이 한 장. 테두리 실선 + 아주 옅은 그림자 */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .btn-primary {
@@ -91,20 +87,23 @@ a {
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 54px;
+  height: 48px;
   border: 0;
-  border-radius: 27px;
-  background: var(--primary);
+  border-radius: 10px;
+  background: var(--accent);
   color: #fff;
   font: inherit;
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 500;
   text-decoration: none;
-  box-shadow: 0 8px 20px rgba(10, 106, 240, 0.3);
   cursor: pointer;
+  transition: background-color 150ms var(--ease), transform 150ms var(--ease);
 }
 
+.btn-primary:hover { background: var(--accent-press); }
+.btn-primary:active { transform: scale(0.98); }
+
 .btn-primary:focus-visible {
-  outline: 3px solid var(--link);
-  outline-offset: 3px;
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
 }
