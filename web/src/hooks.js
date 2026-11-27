@@ -28,3 +28,25 @@ export function useCopy() {
 }
 
 export const roomUrl = (token) => `${window.location.origin}/rooms/${token}`
+
+// 로그인이 없어서, 이 브라우저에서 정산방마다 '나는 누구'(구성원 id)를 기억한다.
+// 사생활 보호 모드 등에서 localStorage가 막혀도 화면은 돌아가야 해서 try로 감싼다
+const meKey = (token) => `gachi-me:${token}`
+
+export function getMe(token, members) {
+  let id = null
+  try { id = Number(localStorage.getItem(meKey(token))) || null } catch { /* 저장소 막힘 → 다시 묻는다 */ }
+  return members.some((m) => m.id === id) ? id : null // 지워진 구성원이면 다시 묻는다
+}
+
+export function useMe(token, members) {
+  const [me, setMeState] = useState(() => getMe(token, members))
+  const setMe = (id) => {
+    try { localStorage.setItem(meKey(token), String(id)) } catch { /* 이번 화면에서만 기억 */ }
+    setMeState(id)
+  }
+  return [members.some((m) => m.id === me) ? me : null, setMe]
+}
+
+// 입력한 이름 → 구성원 (앞뒤 공백 무시, 정확히 같은 이름만)
+export const findMember = (members, name) => members.find((m) => m.name === name.trim()) ?? null

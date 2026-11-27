@@ -1,8 +1,22 @@
 import { Fragment, useState } from 'react'
 import { useParams } from 'react-router'
 import { api } from '../api.js'
-import { roomUrl, useCopy, useLoad } from '../hooks.js'
+import { roomUrl, useCopy, useLoad, useMe } from '../hooks.js'
 import { BackLink, ErrorText, Loading, Page, RoundingSwitch } from '../ui.jsx'
+
+// '나는 누구' 바꾸기 (정산방 홈에서 처음 고른 값)
+function MePicker({ token, members }) {
+  const [me, setMe] = useMe(token, members)
+  return (
+    <div role="group" aria-labelledby="me-label" className="payer-grid">
+      {members.map((m) => (
+        <button key={m.id} type="button" aria-pressed={me === m.id} className={`payer-btn${me === m.id ? ' payer-btn--on' : ''}`} onClick={() => setMe(m.id)}>
+          {m.name}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 export default function Settings() {
   const { token } = useParams()
@@ -34,6 +48,12 @@ export default function Settings() {
         <RoundingSwitch value={room.rounding} onChange={changeRounding} disabled={busy} />
         <ErrorText error={saveError} />
         <p className="muted-13">바꾸면 정산 결과가 '최신 아님'으로 바뀌어요.</p>
+      </div>
+
+      <div className="field">
+        <span id="me-label" className="field-label">나는 누구</span>
+        <MePicker token={token} members={room.members} />
+        <p className="muted-13">이 브라우저에만 저장돼요. 새 영수증의 결제자를 이 사람으로 미리 골라 둬요.</p>
       </div>
 
       <div className="field">
