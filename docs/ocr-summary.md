@@ -2,7 +2,7 @@
 
 - 읽는 사람: OCR 작업의 진행 상황을 처음 보는 팀원
 - 자세한 기록: `docs/ocr-report.md` (회차별 실험 전체)
-- 기준일: 2026-11-25 · 코드: `server/app/ocr/` · 브랜치 `feature/receipt-ocr` (아직 push 전)
+- 기준일: 2026-11-25 · 코드: `server/app/ocr/` · PR #40으로 develop에 병합 (2026-11-26)
 
 ## 1. 한눈에 보기
 
