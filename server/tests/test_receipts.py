@@ -89,25 +89,23 @@ def test_list_is_in_created_order(api, room):
     assert [r["id"] for r in api.get(url(room)).json()] == [first, second]
 
 
-# ------------------------------------------------------------------ 서버 검사 5개 → 422
+# ------------------------------------------------------------------ 만들 때 서버 검사 → 422
+# 'ITEM 1개 이상'과 '총액 있음'은 확정할 때 검사한다 (tests/test_receipt_draft.py)
 
 @pytest.mark.parametrize(("over", "fields"), [
-    # 1. 결제자가 이 정산방 구성원인가
+    # 결제자가 이 정산방 구성원인가
     ({"payer_member_id": 9999}, {"payer_member_id": "이 정산방 구성원이 아닙니다"}),
-    # 2. ITEM 줄이 1개 이상인가
-    ({"items": []}, {"items": "품목(ITEM) 줄이 1개 이상 있어야 합니다"}),
-    ({"items": [{"name": "할인", "amount": -1000, "kind": "DISCOUNT"}]},
-     {"items": "품목(ITEM) 줄이 1개 이상 있어야 합니다"}),
-    # 3. ITEM 금액 > 0, DISCOUNT 금액 < 0
+    # ITEM 금액 > 0, DISCOUNT 금액 < 0
     ({"items": [{"name": "x", "amount": 0, "kind": "ITEM"}]}, {"items.0.amount": "품목 금액은 0보다 커야 합니다"}),
     ({"items": [{"name": "x", "amount": 100}, {"name": "할인", "amount": 100, "kind": "DISCOUNT"}]},
      {"items.1.amount": "할인 금액은 0보다 작아야 합니다 (예: -5000)"}),
-    # 4. 모든 줄에 이름이 있는가
+    # 모든 줄 · 가게에 이름이 있는가
     ({"items": [{"name": " ", "amount": 100}]}, {"items.0.name": "빈 값은 안 됩니다"}),
     ({"store_name": ""}, {"store_name": "빈 값은 안 됩니다"}),
-    # 5. 총액이 있고 0보다 큰가
+    ({"store_name": "가" * 51}, {"store_name": "50자 이하여야 합니다"}),
+    # 총액을 보냈다면 0보다 큰가
     ({"total_amount": 0}, {"total_amount": "0보다 커야 합니다"}),
-    ({"total_amount": None}, {"total_amount": "정수여야 합니다"}),
+    ({"total_amount": "만원"}, {"total_amount": "정수여야 합니다"}),
     # 그 밖의 모양 검사
     ({"items": [{"name": "x", "amount": 100, "kind": "TAX"}]},
      {"items.0.kind": "'ITEM' 또는 'DISCOUNT' 중 하나여야 합니다"}),
@@ -119,11 +117,12 @@ def test_create_validation(api, room, over, fields):
     assert error(res)["details"]["fields"] == fields
 
 
-def test_missing_total_and_payer(api, room):
+def test_missing_store_and_payer(api, room):
+    """가게 이름과 결제자는 꼭 있어야 한다 (총액 · 품목은 비워도 된다)."""
     b = body(room)
-    del b["total_amount"], b["payer_member_id"]
+    del b["store_name"], b["payer_member_id"], b["total_amount"], b["items"]
     res = api.post(url(room), b, expect=422)
-    assert error(res)["details"]["fields"] == {"payer_member_id": "필수", "total_amount": "필수"}
+    assert error(res)["details"]["fields"] == {"payer_member_id": "필수", "store_name": "필수"}
 
 
 def test_payer_from_other_room_is_rejected(api, room):
@@ -193,7 +192,7 @@ def test_update_kind_change_resets_checks(api, client, room):
 def test_update_rejects_foreign_line_id(api, room, which):
     r = api.post(url(room), body(room)).json()
     if which == "other_receipt":
-        line_id = api.post(url(room), body(room)).json()["items"][0]["id"]
+        line_id = api.post(url(room), body(room, store_name="2차 식당")).json()["items"][0]["id"]
     elif which == "other_room":
         other = api.post("/rooms", {"name": "x", "members": ["X", "Y"]}).json()
         line_id = api.post(url(other), body(other)).json()["items"][0]["id"]

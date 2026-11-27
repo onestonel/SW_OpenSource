@@ -81,6 +81,9 @@ class Receipt(Base):
     """영수증 한 장. 결제자 한 명이 총액을 냈다. 정산은 품목 합이 아니라 총액 기준이다.
 
     결제자로 쓰인 구성원은 지울 수 없다 (API: 409 MEMBER_IN_USE, DB: ON DELETE RESTRICT).
+    총액은 '확인 중'일 때 비어 있을 수 있고, 확정할 때 검사한다 (API: 409 RECEIPT_INCOMPLETE).
+    가게 이름은 정산방 안에서 겹치지 않게 API에서 검사한다 (409 STORE_NAME_DUPLICATE). 이미 겹친 데이터가
+    있을 수 있어 DB 고유 제약은 걸지 않았다.
     """
 
     __tablename__ = "receipts"
@@ -93,7 +96,7 @@ class Receipt(Base):
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), index=True)
     store_name: Mapped[str] = mapped_column(String(50))
     payer_member_id: Mapped[int] = mapped_column(ForeignKey("members.id", ondelete="RESTRICT"), index=True)
-    total_amount: Mapped[int] = mapped_column(BigInteger)
+    total_amount: Mapped[int | None] = mapped_column(BigInteger)  # 확인 중에는 비어 있을 수 있다 (확정할 때 검사)
     status: Mapped[str] = mapped_column(String(10), default="CHECKING", server_default="CHECKING")
     photo_path: Mapped[str | None] = mapped_column(String(255))  # RECEIPT_STORAGE_PATH 안의 파일 이름 (사진은 선택)
     created_at: Mapped[datetime] = mapped_column(TS, default=utcnow)
