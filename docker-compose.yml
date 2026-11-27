@@ -3,6 +3,7 @@
 #   docker compose up            화면 + 서버 + DB 켜기
 #   docker compose up db server  화면 없이 서버 + DB만 켜기
 #   docker compose --profile llm up   LLM 서버까지 켜기 (V3)
+#   docker compose --profile ocr up   OCR 서버(PaddleOCR)까지 켜기 (V2 · .env에 OCR_ENGINE=remote와 같이)
 #   docker compose down          끄기 (DB 데이터는 남음)
 #   docker compose down -v       끄고 DB 데이터까지 지우기
 #
@@ -45,6 +46,8 @@ services:
       NL_BASE_URL: http://llm:8080/v1
       OPENAI_API_KEY: ${OPENAI_API_KEY:-} # 있으면 작은 모델이 못 알아들을 때만 GPT에 다시 묻는다 (.env에만, 커밋 금지)
       NL_FALLBACK_MODEL: ${NL_FALLBACK_MODEL:-gpt-4.1-mini}
+      OCR_ENGINE: ${OCR_ENGINE:-stub} # remote면 사진 인식을 ocr 컨테이너(--profile ocr)에 맡긴다
+      OCR_URL: http://ocr:8000
       TZ: Asia/Seoul
       WATCHFILES_FORCE_POLLING: "true" # Windows에서 파일을 고쳐도 자동 재시작되게
     ports:
@@ -80,6 +83,24 @@ services:
     depends_on:
       - server
 
+  # ── OCR 서버 (V2 · --profile ocr 일 때만) ───────────
+  # PaddleOCR은 서버 패키지와 버전이 부딪혀서 따로 돈다. 이미지가 약 1GB라 평소에는 꺼 둔다.
+  ocr:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.ocr
+    profiles: ["ocr"]
+    command: uvicorn app.ocr.service:app --host 0.0.0.0 --port 8000
+    environment:
+      PADDLE_PDX_CACHE_HOME: /models
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True" # 켤 때마다 모델 저장소 연결을 확인하지 않게
+      TZ: Asia/Seoul
+    ports:
+      - "8002:8000" # 서버를 Docker 없이 켤 때만 쓴다. 서버 컨테이너는 ocr:8000으로 부른다
+    volumes:
+      - ./server:/app
+      - ocr_models:/models
+
   # ── LLM 서버 (V3 · --profile llm 일 때만) ───────────
   llm:
     image: ghcr.io/ggml-org/llama.cpp:server
@@ -114,3 +135,4 @@ volumes:
   receipt_files: # 영수증 사진
   web_node_modules: # 화면 라이브러리 (Windows 폴더와 섞이지 않게 따로 둠)
   llm_models: # LLM 모델 파일 (처음 한 번만 받음)
+  ocr_models: # OCR 모델 파일 (처음 한 번만 받음)

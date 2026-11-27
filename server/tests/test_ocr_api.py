@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import io
+import json
+import urllib.error
+
 import pytest
 
 from app import storage
 from app.api.v1 import ocr as ocr_api
-from app.ocr.engines import EngineUnavailable
+from app.ocr import run_ocr
+from app.ocr.engines import EngineUnavailable, get_engine
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 
@@ -59,3 +64,35 @@ def test_engine_unavailable(client, api, monkeypatch):
     res = client.post(upload(client, api) + "/ocr", params={"engine": "tesseract"})
     assert res.status_code == 503
     assert res.json()["error"]["code"] == "OCR_UNAVAILABLE"
+
+
+def test_remote_engine(client, api, monkeypatch):
+    """remote(OCR_ENGINE=remote): 사진을 ocr 컨테이너로 보내고, 받은 결과를 그대로 돌려준다."""
+    sent = []
+
+    def fake_urlopen(req, timeout):
+        sent.append(req)
+        return io.BytesIO(json.dumps(run_ocr(b"", get_engine("stub")).to_dict()).encode())
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    res = client.post(upload(client, api) + "/ocr", params={"engine": "remote"})
+    assert res.status_code == 200
+    assert res.json()["draft"]["total_amount"] == 93000
+    assert sent[0].full_url.endswith("/ocr") and sent[0].data == PNG
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "code"),
+    [
+        (urllib.error.URLError(ConnectionRefusedError()), 503, "OCR_UNAVAILABLE"),  # 컨테이너가 꺼져 있음
+        (urllib.error.HTTPError("http://ocr:8000/ocr", 422, "", {}, io.BytesIO(b"{}")), 422, "IMAGE_UNREADABLE"),
+    ],
+)
+def test_remote_engine_errors(client, api, monkeypatch, error, status, code):
+    def fail(req, timeout):
+        raise error
+
+    monkeypatch.setattr("urllib.request.urlopen", fail)
+    res = client.post(upload(client, api) + "/ocr", params={"engine": "remote"})
+    assert res.status_code == status
+    assert res.json()["error"]["code"] == code
