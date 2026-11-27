@@ -47,9 +47,9 @@ export default function ReceiptDetail() {
         결제 {r.payer.name} · {confirmed ? '정산에 들어가요' : r.photo_url ? '영수증 사진 있음' : '사진 없음'}
       </p>
 
-      {r.photo_url && <img src={photoSrc(r.photo_url)} alt="올린 영수증 사진" className="glass detail-photo" />}
+      {r.photo_url && <img src={photoSrc(r.photo_url)} alt="올린 영수증 사진" className="card detail-photo" />}
 
-      <div className="glass lines-card">
+      <div className="card lines-card">
         {r.items.map((it) => (
           <div key={it.id} className={`line${it.kind === 'DISCOUNT' ? ' line--discount' : ''}`}>
             <span>{it.name}</span><span>{won(it.amount)}</span>

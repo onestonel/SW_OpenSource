@@ -47,7 +47,7 @@ export default function RoomHome() {
 
       <div className="stack-10">
         {receipts.map((r) => (
-          <Link key={r.id} to={`${base}/receipts/${r.id}`} className="glass receipt-card">
+          <Link key={r.id} to={`${base}/receipts/${r.id}`} className="card receipt-card">
             <div className="stack-4 grow">
               <span className="strong-16">{r.store_name}</span>
               <span className="muted-13">결제 {r.payer.name} · 품목 {r.items.filter((it) => it.kind === 'ITEM').length}개</span>
@@ -66,7 +66,7 @@ export default function RoomHome() {
       <p className="muted-13">확정한 영수증만 정산에 들어가요</p>
 
       <div className="spacer" />
-      <nav className="glass nav-list" aria-label="정산 단계">
+      <nav className="card nav-list" aria-label="정산 단계">
         <Link to={`${base}/split`} className="nav-card">
           <span aria-hidden="true" className="nav-card__icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M8 12l3 3 5-6" /></svg>

@@ -72,7 +72,7 @@ export function Loading({ error, back = '/' }) {
 export function RoundingSwitch({ value, onChange, disabled }) {
   const on = value === 'WON_10'
   return (
-    <div className="glass card-pad stack-10">
+    <div className="card card-pad stack-10">
       <div className="row-between">
         <span aria-hidden="true" className="strong-16">10원 단위로 올리기</span>
         <button

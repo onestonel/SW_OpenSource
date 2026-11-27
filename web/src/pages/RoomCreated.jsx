@@ -18,7 +18,7 @@ export default function RoomCreated() {
         <p className="muted-15">{room.name} · 구성원 {room.members.length}명</p>
       </div>
 
-      <div className="glass card-pad stack-12">
+      <div className="card card-pad stack-12">
         <span className="field-label">정산방 링크</span>
         <div className="link-box">{url}</div>
         <button type="button" className="btn-secondary" onClick={() => copy(url)}>

@@ -1,31 +1,32 @@
 /* 디자인 방향 (Issue #43): 영수증 종이와 계산대
-   - 바탕은 감열지 같은 따뜻한 회색, 글자는 잉크, 강조색은 도장 주홍 하나 (주 버튼 · '확정'에만)
-   - 그라데이션 · 흐린 색 덩어리 · 유리 효과 · 색 그림자는 쓰지 않는다
-   - 간격은 4px 격자, 굵기는 400 · 500, 금액은 고정폭 숫자(IBM Plex Mono) */
+   - 그라데이션 · 흐린 색 덩어리(배경의 원) · 반투명 유리 카드 · 색 그림자는 쓰지 않는다
+     (AI가 평균적으로 고르는 남보라 계열 · 흐린 원 두 개 + 유리 카드 배치가 대표적인 AI 티라서)
+   - 간격은 4px 격자, 굵기는 400 · 500, 금액은 고정폭 숫자(IBM Plex Mono)
+
+   색의 근거 — 앱이 다루는 실제 물건에서 가져왔다
+   - 바탕 · 카드: 영수증 감열지의 누런 흰색. 순백(#fff) 대신 노란 기가 조금 도는 미색
+   - 글자: 영수증 인쇄 잉크. 순검정 대신 따뜻한 먹색
+   - 강조(하나뿐): 도장 인주의 주홍. 안료 주홍(vermilion, 흔히 #E34234)과 같은 색상각 5°로 두고,
+     흰 글자 · 글자색으로 쓸 때 WCAG AA(4.5:1)를 넘도록 명도만 낮췄다
+   - 대비는 모두 계산해 확인했다 (괄호: 바탕 #f7f4ee 위 / 흰 글자) */
 :root {
-  --bg: #f7f4ee;        /* 바탕 */
+  --bg: #f7f4ee;        /* 바탕: 감열지 */
   --card: #fdfbf7;      /* 카드 · 입력칸 */
   --raised: #efe9df;    /* 눌린 칸 · 칩 */
-  --text: #1f1b16;      /* 잉크 */
-  --text-sub: #5e554a;
-  --muted: #7b7266;
+  --text: #1f1b16;      /* 잉크 (15.6:1) */
+  --text-sub: #5e554a;  /* (6.7:1) */
+  --muted: #6f665a;     /* 날짜 · 개수 같은 보조 글자 (5.1:1, 칩 위 4.7:1) */
   --line: rgba(31, 27, 22, 0.08);
   --line-strong: rgba(31, 27, 22, 0.16);
-  --accent: #c2522b;    /* 도장 주홍 (흰 글자 대비 6.3:1) */
-  --accent-press: #a8431f;
-  --success: #1f7a4d;
+  --accent: #b8372a;    /* 인주 주홍 — 색상각 5° (5.3:1 / 흰 글자 5.8:1) */
+  --accent-press: #9a2d22;
+  --success: #1f7a4d;   /* (4.8:1) */
   --success-bg: rgba(31, 122, 77, 0.1);
-  --warn: #8a5a14;
+  --warn: #8a5a14;      /* (5.4:1) */
   --warn-bg: rgba(138, 90, 20, 0.1);
-  --error: #b42323;
+  --error: #9b1c31;     /* 진홍 — 강조 주홍과 헷갈리지 않게 색상각 350°, 더 어둡게 (7.4:1) */
   --mono: 'IBM Plex Mono', ui-monospace, monospace;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-
-  /* 예전 이름을 쓰는 곳을 위해 남겨 둔다 */
-  --link: var(--text);
-  --glass-bg: var(--card);
-  --glass-border: var(--line);
-  --primary: var(--text);
 
   font-family: 'IBM Plex Sans KR', -apple-system, 'Apple SD Gothic Neo', sans-serif;
   color: var(--text);
@@ -73,8 +74,8 @@ b, strong, th {
   gap: 24px;
 }
 
-/* 카드: 종이 한 장. 테두리 실선 + 아주 옅은 그림자 */
-.glass {
+/* 카드 (예전 이름 .glass): 종이 한 장. 테두리 실선 + 아주 옅은 그림자 */
+.card {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 12px;

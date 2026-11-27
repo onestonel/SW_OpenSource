@@ -38,7 +38,7 @@ export default function Settings() {
 
       <div className="field">
         <span className="field-label">구성원 순서</span>
-        <div className="glass card-pad-sm row-wrap">
+        <div className="card card-pad-sm row-wrap">
           {room.members.map((m, i) => (
             <Fragment key={m.id}>
               {i > 0 && <span aria-hidden="true" className="faint">›</span>}
@@ -51,7 +51,7 @@ export default function Settings() {
 
       <div className="field">
         <span className="field-label">정산방 링크</span>
-        <div className="glass card-pad-sm row-gap-12">
+        <div className="card card-pad-sm row-gap-12">
           <span className="ellipsis grow">{url}</span>
           <button type="button" className="btn-pill" onClick={() => copy(url)}>복사</button>
         </div>

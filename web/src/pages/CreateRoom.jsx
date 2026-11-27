@@ -52,7 +52,7 @@ export default function CreateRoom() {
             <span id="members-label" className="field-label">구성원</span>
             <span className="muted-13">{members.length}명</span>
           </div>
-          <div role="group" aria-labelledby="members-label" className="glass list-box">
+          <div role="group" aria-labelledby="members-label" className="card list-box">
             {members.map((m, i) => (
               <div key={i} className="list-row">
                 <span aria-hidden="true" className="list-row__num">{i + 1}</span>

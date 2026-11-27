@@ -59,7 +59,7 @@ export default function Result() {
         </div>
       )}
 
-      {!s && <p className="glass card-pad muted-14">영수증을 확정하고 분담 조건을 정한 뒤 '다시 계산'을 눌러주세요.</p>}
+      {!s && <p className="card card-pad muted-14">영수증을 확정하고 분담 조건을 정한 뒤 '다시 계산'을 눌러주세요.</p>}
 
       {s && (
         <>
@@ -69,7 +69,7 @@ export default function Result() {
 
           <section className="stack-6" style={{ gap: 8 }}>
             <h2 className="subtitle" style={{ fontSize: 16 }}>사람별</h2>
-            <table className="glass result-table">
+            <table className="card result-table">
               <thead>
                 <tr><th scope="col"><span className="visually-hidden">이름</span></th><th scope="col">낸 돈</th><th scope="col">내야 할 돈</th><th scope="col">결과</th></tr>
               </thead>
