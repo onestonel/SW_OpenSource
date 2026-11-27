@@ -1,14 +1,51 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api, won } from '../api.js'
-import { useLoad } from '../hooks.js'
+import { findMember, useLoad, useMe } from '../hooks.js'
 import { BackLink, Loading, Page, StatusBadge } from '../ui.jsx'
 
 export default function RoomHome() {
   const { token } = useParams()
   const { data, error } = useLoad(() => Promise.all([api.getRoom(token), api.listReceipts(token)]), [token])
   if (!data) return <Loading error={error} />
+  return <Room room={data[0]} receipts={data[1]} />
+}
 
-  const [room, receipts] = data
+// 정산방에 처음 들어오면(이 브라우저에 고른 사람이 없으면) 구성원 중 누구인지 먼저 묻는다
+function WhoAmI({ room, onPick }) {
+  const [name, setName] = useState('')
+  const [error, setError] = useState(null)
+  const submit = (e) => {
+    e.preventDefault()
+    const m = findMember(room.members, name)
+    if (m) onPick(m.id)
+    else setError(`구성원에 없는 이름이에요. 구성원: ${room.members.map((x) => x.name).join(', ')}`)
+  }
+  return (
+    <Page gap={20}>
+      <BackLink to="/" label="처음 화면으로" />
+      <div className="stack-6">
+        <h1 className="title">{room.name}</h1>
+        <p className="muted-14">이 정산방에서 누구인지 알려 주세요. 영수증을 넣을 때 결제자를 본인으로 미리 골라 둘게요.</p>
+      </div>
+      <form className="stack-12" onSubmit={submit}>
+        <div className="field">
+          <label htmlFor="me">내 이름</label>
+          <input id="me" className="input" type="text" list="member-names" autoComplete="off" placeholder="예: 민수" value={name} onChange={(e) => setName(e.target.value)} />
+          <datalist id="member-names">{room.members.map((m) => <option key={m.id} value={m.name} />)}</datalist>
+        </div>
+        {error && <p className="error-text" role="alert">{error}</p>}
+        <button type="submit" className="btn-primary" disabled={!name.trim()}>확인</button>
+        <p className="muted-13">이 브라우저에만 저장돼요. 정산방 설정에서 바꿀 수 있어요.</p>
+      </form>
+    </Page>
+  )
+}
+
+function Room({ room, receipts }) {
+  const token = room.room_token
+  const [me, setMe] = useMe(token, room.members)
+  if (!me) return <WhoAmI room={room} onPick={setMe} />
   const confirmed = receipts.filter((r) => r.status === 'CONFIRMED').length
   const s = room.latest_settlement
   const base = `/rooms/${token}`
@@ -31,7 +68,7 @@ export default function RoomHome() {
       <div className="stack-10">
         <h1 className="title">{room.name}</h1>
         <div className="chips">
-          {room.members.map((m) => <span key={m.id} className="chip">{m.name}</span>)}
+          {room.members.map((m) => <span key={m.id} className={`chip${m.id === me ? ' chip--me' : ''}`}>{m.name}{m.id === me && ' (나)'}</span>)}
           <span className="muted-13">구성원 {room.members.length}명</span>
         </div>
       </div>
