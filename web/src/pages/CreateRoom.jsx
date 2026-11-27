@@ -4,7 +4,7 @@ import { api } from '../api.js'
 import { BackLink, ErrorText, Page, RoundingSwitch } from '../ui.jsx'
 
 const XIcon = () => (
-  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
 )
@@ -38,7 +38,7 @@ export default function CreateRoom() {
       <BackLink to="/" />
       <div className="stack-6">
         <h1 className="title">새 정산방</h1>
-        <p className="muted-14">정산방 이름과 함께한 사람을 적어 주세요.</p>
+        <p className="muted-14">정산방 이름과 함께한 사람을 적어 주세요</p>
       </div>
 
       <form className="stack-20 grow" onSubmit={submit}>
@@ -52,7 +52,7 @@ export default function CreateRoom() {
             <span id="members-label" className="field-label">구성원</span>
             <span className="muted-13">{members.length}명</span>
           </div>
-          <div role="group" aria-labelledby="members-label" className="glass list-box">
+          <div role="group" aria-labelledby="members-label" className="card list-box">
             {members.map((m, i) => (
               <div key={i} className="list-row">
                 <span aria-hidden="true" className="list-row__num">{i + 1}</span>

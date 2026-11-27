@@ -47,7 +47,7 @@ export default function Settings() {
         <span className="field-label">원 단위</span>
         <RoundingSwitch value={room.rounding} onChange={changeRounding} disabled={busy} />
         <ErrorText error={saveError} />
-        <p className="muted-13">바꾸면 정산 결과가 '최신 아님'으로 바뀌어요.</p>
+        <p className="muted-13">바꾸면 정산 결과가 '최신 아님'으로 바뀌어요</p>
       </div>
 
       <div className="field">
@@ -58,7 +58,7 @@ export default function Settings() {
 
       <div className="field">
         <span className="field-label">구성원 순서</span>
-        <div className="glass card-pad-sm row-wrap">
+        <div className="card card-pad-sm row-wrap">
           {room.members.map((m, i) => (
             <Fragment key={m.id}>
               {i > 0 && <span aria-hidden="true" className="faint">›</span>}
@@ -71,7 +71,7 @@ export default function Settings() {
 
       <div className="field">
         <span className="field-label">정산방 링크</span>
-        <div className="glass card-pad-sm row-gap-12">
+        <div className="card card-pad-sm row-gap-12">
           <span className="ellipsis grow">{url}</span>
           <button type="button" className="btn-pill" onClick={() => copy(url)}>복사</button>
         </div>

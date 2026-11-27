@@ -5,7 +5,7 @@ import { getMe, useLoad } from '../hooks.js'
 import { BackLink, CheckIcon, ErrorText, Loading, Page } from '../ui.jsx'
 
 const XIcon = () => (
-  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
 )
@@ -90,7 +90,7 @@ function Form({ room, receipt }) {
       </div>
 
       {/* 사진은 크게 보기를 켜면 위에 붙어 있어서, 스크롤하며 입력칸과 같이 볼 수 있다 */}
-      <div className={`glass photo-card${bigPhoto ? ' photo-card--big' : ''}`}>
+      <div className={`card photo-card${bigPhoto ? ' photo-card--big' : ''}`}>
         {preview
           ? <img src={preview} alt="올린 영수증 사진" className="photo-card__img" />
           : <div aria-hidden="true" className="photo-card__empty" />}
@@ -132,7 +132,7 @@ function Form({ room, receipt }) {
 
         <div className="field">
           <span className="field-label">품목</span>
-          <div className="glass list-box">
+          <div className="card list-box">
             {lines.map((l, i) => (
               <div key={l.key} className="list-row">
                 <input

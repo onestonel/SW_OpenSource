@@ -66,7 +66,7 @@ function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
       </div>
 
       {groups.length === 0 && (
-        <div className="glass card-pad stack-12">
+        <div className="card card-pad stack-12">
           <p className="muted-14">아직 확정한 영수증이 없어요. 영수증을 확정하면 여기에 품목이 나와요.</p>
           <Link to={base} className="btn-secondary">정산방으로</Link>
         </div>
@@ -75,7 +75,7 @@ function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
       {groups.length > 0 && <SayBox token={token} members={members} chat={chat} setChat={setChat} onApplied={onApplied} />}
 
       {groups.map((rows) => (
-        <div key={rows[0].receipt_id} className="glass check-card">
+        <div key={rows[0].receipt_id} className="card check-card">
           <div className="check-grid check-grid--head" style={cols}>
             <span className="strong" style={{ fontSize: 15 }}>
               {rows[0].store_name} <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>· 결제 {payerOf[rows[0].receipt_id]}</span>
@@ -87,7 +87,7 @@ function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
             const empty = ids.length === 0
             return (
               <div key={it.item_id} className={`check-grid check-grid--row${flash.includes(it.item_id) ? ' check-grid--flash' : ''}`} style={cols}>
-                <div className="stack-4" style={{ gap: 1, minWidth: 0 }}>
+                <div className="stack-4" style={{ gap: 2, minWidth: 0 }}>
                   <span style={{ fontSize: 15 }}>{it.name}</span>
                   {empty
                     ? <span className="check-hint check-hint--error">최소 1명을 체크하세요</span>
@@ -100,7 +100,7 @@ function Table({ token, checks, receipts, flash, chat, setChat, onApplied }) {
                       <input type="checkbox" className="visually-hidden" checked={on} aria-label={`${it.name} ${m.name}`} onChange={() => toggle(it.item_id, m.id)} />
                       <span aria-hidden="true" className={`check-box${on ? ' check-box--on' : ''}${empty ? ' check-box--error' : ''}`}>
                         {on && (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--card)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
                         )}
                       </span>
                     </label>
@@ -175,7 +175,7 @@ function SayBox({ token, members, chat, setChat, onApplied }) {
   }
 
   return (
-    <form className="glass card-pad stack-10" onSubmit={ask}>
+    <form className="card card-pad stack-10" onSubmit={ask}>
       <div className="stack-4">
         <label htmlFor="say" className="field-label">AI 총무에게 말하기</label>
         <span className="muted-13">예: 현우는 술 안 마셨어 · 패러글라이딩은 지영이랑 현우만 탔어 · 현우랑 수아는 숙소비 보냈어</span>

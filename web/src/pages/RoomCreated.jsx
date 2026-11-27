@@ -14,11 +14,11 @@ export default function RoomCreated() {
     <Page gap={24}>
       <div className="center-col" style={{ paddingTop: 64 }}>
         <div aria-hidden="true" className="done-circle"><CheckIcon size={34} /></div>
-        <h1 className="title" style={{ fontSize: 26 }}>정산방을 만들었어요</h1>
+        <h1 className="title">정산방을 만들었어요</h1>
         <p className="muted-15">{room.name} · 구성원 {room.members.length}명</p>
       </div>
 
-      <div className="glass card-pad stack-12">
+      <div className="card card-pad stack-12">
         <span className="field-label">정산방 링크</span>
         <div className="link-box">{url}</div>
         <button type="button" className="btn-secondary" onClick={() => copy(url)}>
