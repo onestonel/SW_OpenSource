@@ -1,0 +1,13 @@
+# OCR 서버 이미지 (docker compose --profile ocr). PaddleOCR은 서버 패키지와 numpy · OpenCV 버전이 부딪혀서 따로 만든다.
+# 코드는 compose가 server/ 폴더를 /app에 연결해서 넣으므로, 여기서는 라이브러리만 설치한다.
+FROM python:3.12-slim
+
+# PaddleOCR이 쓰는 OpenCV(libGL · glib)와 PaddlePaddle(OpenMP)이 찾는 시스템 라이브러리
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements.txt .
+# 버전은 비교 실험(보고서 3~6회차)과 같게. paddlepaddle 3.3.x는 CPU 가속에서 오류가 났다 (app/ocr/README.md)
+RUN pip install --no-cache-dir -r requirements.txt Pillow paddlepaddle==3.2.2 paddleocr==3.7.0

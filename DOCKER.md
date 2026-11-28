@@ -19,6 +19,7 @@
 | 끄기 (데이터는 남음) | `Ctrl+C` 후 `docker compose down` |
 | DB를 비우고 처음부터 | `docker compose down -v` |
 | 한 곳의 로그만 보기 | `docker compose logs -f server` |
+| 영수증 사진 인식(PaddleOCR)까지 | `.env`에 `OCR_ENGINE=remote`를 넣고 `docker compose --profile ocr up` |
 
 ## 켜졌는지 확인
 
@@ -38,7 +39,11 @@
 
 - **화면 (프론트엔드)**: 컨테이너는 `npm install` 다음 `npm run dev -- --host 0.0.0.0 --port 3000`을 실행합니다 (Vite 기준). 서버 주소는 `VITE_API_BASE_URL`(`http://localhost:8000/api/v1`)로 들어옵니다. 다른 방식으로 틀을 만들면 `docker-compose.yml`의 `web` 줄을 같이 고쳐주세요.
 - **서버 (백엔드)**: `server/requirements.txt`를 설치하고 `uvicorn app.main:app --reload`로 켭니다. DB 주소는 `DATABASE_URL`, 사진 저장 폴더는 `RECEIPT_STORAGE_PATH`(`/data/receipts`)로 들어옵니다.
-- **OCR (V2)**: RabbitMQ와 Worker는 V2를 시작할 때 이 파일에 추가합니다.
+- **OCR (V2)**: `.env`에 `OCR_ENGINE=remote`를 넣고 `docker compose --profile ocr up` 하면 PaddleOCR 서버(`ocr`)가 켜지고, 서버가 사진 인식을 이 컨테이너에 맡깁니다. 기본값 `stub`이면 이 컨테이너가 필요 없습니다.
+  - 처음 한 번은 이미지 빌드(약 5분, 2.35GB)와 모델 내려받기로 오래 걸리고, 그다음부터는 몇 초 만에 켜집니다. 메모리는 약 1.6GB를 씁니다.
+  - 사진 한 장에 진짜 영수증 기준 평균 약 11초, 길면 18초 걸립니다 (llm을 같이 켜 둔 상태, CPU 14코어 PC).
+  - ocr 컨테이너는 코드를 고쳐도 자동으로 다시 켜지지 않습니다. `server/app/ocr/`를 고쳤으면 `docker compose restart ocr` 하세요.
+  - RabbitMQ와 Worker는 V2를 시작할 때 이 파일에 추가합니다.
 - **LLM (V3)**: `docker compose --profile llm up` 하면 llama.cpp 서버(EXAONE 3.5 2.4B)가 8080 포트로 켜집니다. 처음에는 모델(약 1.5GB)을 받느라 몇 분 걸립니다.
 
 ## 안 될 때

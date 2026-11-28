@@ -13,6 +13,7 @@
 | `engines.py` | OCR 엔진. `stub`(고정 답) · `tesseract` · `easyocr` · `paddleocr`. 새 엔진은 클래스 하나 + `ENGINES`에 등록. 글자 상자에 낱말 위치(`words`)를 담으면 표 읽기에 쓰임 |
 | `preprocess.py` | 사진 다듬기. `PreprocessOptions`로 단계마다 켜고 끔: 영역 자르기 · 크기 · 조명 평탄화 · 기울기 · 이진화 (기본은 크기 · 명암만) |
 | `pipeline.py` | 전체 흐름 `run_ocr(사진 바이트) → OcrResult`, 글자 상자를 줄로 묶는 `group_lines` |
+| `service.py` | ocr 컨테이너의 OCR 서버(`POST /ocr`). 서버가 `OCR_ENGINE=remote`일 때 사진을 보낸다. 6회차 최고 설정(PaddleOCR `unwarp=true` + 최소 전처리)으로 읽음 |
 | `parser.py` | 줄 → 초안. ① 낱말 위치로 표의 열(단가 · 수량 · 금액) 나누기 ② 규칙(`ParseRules`) ③ 단가×수량 · 품목 합 = 합계로 잘못 읽은 금액 고치기 |
 | `bench.py` | 평가 데이터로 점수 매기기. 초안 점수(가게 · 합계 · 품목 F1)와 엔진 점수(파서 없이 본 금액 · 이름 인식률) |
 | `ablation.py` | 전처리 단계를 켜고 끄며 점수 비교 (`--grid`: 모든 조합) |
@@ -30,7 +31,7 @@ pip install -r requirements-ocr.txt
 - **EasyOCR**(비교용): `pip install easyocr`. 처음 쓸 때 한국어 모델을 내려받습니다.
 - **Tesseract best 모델**(비교용): [tessdata_best](https://github.com/tesseract-ocr/tessdata_best)의 `kor.traineddata`를
   `kor_best.traineddata`로 이름을 바꿔 Tesseract의 `tessdata` 폴더에 넣고 `--engine tesseract:lang=kor_best`로 씁니다.
-- **PaddleOCR**(3회차 비교에서 가장 좋음, 서버 적용 전): numpy · OpenCV 버전이 기존 `.venv`의 패키지와 부딪혀서 **별도 가상환경**에 설치합니다.
+- **PaddleOCR**(3회차 비교에서 가장 좋음. 서버에서는 아래 ocr 컨테이너로 씀): numpy · OpenCV 버전이 기존 `.venv`의 패키지와 부딪혀서 실험할 때는 **별도 가상환경**에 설치합니다.
   Windows에서 부딪힌 문제 세 가지와 해결:
   - 경로 260자 제한: 깊은 폴더 안에서는 설치가 실패해서 짧은 경로에 만든다.
   - paddlepaddle 3.3.x: CPU 가속(oneDNN)에서 `NotImplementedError`가 나서 3.2.2를 쓴다 (가속을 끄면 장당 약 150초).
@@ -42,6 +43,8 @@ pip install -r requirements-ocr.txt
   & $HOME\.venvs\ocr-paddle\Scripts\python.exe -m app.ocr.bench --engine paddleocr --split dev   # server 폴더에서
   ```
 - 서버 기본값은 `OCR_ENGINE=stub`이라 OCR을 설치하지 않은 팀원은 아무것도 하지 않아도 됩니다.
+- **서버에서 PaddleOCR 쓰기**: `.env`에 `OCR_ENGINE=remote`를 넣고 `docker compose --profile ocr up` 합니다 ([DOCKER.md](../../../DOCKER.md)).
+  ocr 컨테이너(`Dockerfile.ocr` · `service.py`)가 사진을 읽고, 꺼져 있거나 모델을 불러오는 중이면 API가 503 `OCR_UNAVAILABLE`로 알립니다.
 
 ## 써 보기
 
@@ -96,6 +99,7 @@ cd server
 - 진짜 사진의 번호는 저장소 밖에 둔 원본 사진의 번호와 다를 수 있습니다(사진을 21장으로 늘릴 때 dev · test 나누기를 바꿈). 원본에서 다시 만들어 덮어쓰면 가리기가 풀리고 정답과 어긋나니, 사진을 고칠 때는 `samples/`의 파일을 직접 고칩니다.
 - 영역 자르기 · 기울기 보정은 있지만 기본으로 꺼져 있습니다 (진짜 사진 14장으로 비교해도 점수가 오르지 않음, 보고서 2회차). 말린 종이 펴기는 PaddleOCR의 `unwarp` 설정뿐입니다.
 - 엔진 비교(보고서 3회차)에서는 PaddleOCR(`paddleocr:unwarp=true` + 최소 전처리)이 가장 좋았지만(진짜 사진 품목 F1 dev 0.72 · test 0.68, Tesseract는 0.44 · 0.42),
-  별도 가상환경이 필요해서 서버(`OCR_ENGINE`, API의 `engine`)에는 아직 넣지 않았습니다.
+  서버 패키지와 버전이 부딪혀서 서버 안이 아니라 별도 ocr 컨테이너로 붙였습니다 (`OCR_ENGINE=remote`).
 - 품목의 수량은 `lines`에만 있고 초안에는 없습니다 (약속서 품목 칸에 수량이 없어서).
 - 요청 안에서 OCR을 기다립니다 (폰 사진 기준 Tesseract 약 1초, PaddleOCR 평균 15.5초 · 가장 느린 장 26.5초, 6회차 test). V2에서는 Worker로 옮깁니다.
+  ocr 컨테이너로 서버 API를 거치면 dev 진짜 사진 15장 기준 평균 10.8초 · 가장 느린 장 18.2초입니다 (llm 컨테이너를 같이 켜 둔 상태).
